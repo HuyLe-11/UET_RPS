@@ -20,7 +20,7 @@
 1. Mở trang chính, đăng ký tên thi đấu (3–20 ký tự, chỉ gồm chữ cái tiếng Anh, chữ số và `_`). Hệ thống cấp token; token là thông tin đăng nhập của thí sinh.
 2. Viết bot theo giao thức bên dưới, chọn file `.py` rồi nộp bằng token. Hệ thống giới hạn file 64 KB và kiểm tra cú pháp Python trước khi nhận.
 3. Dùng mục trạng thái để xem giai đoạn, vòng, ngày, bảng và điểm; mục bảng xếp hạng hiển thị kết quả bảng của tài khoản đó. Sau khi chấm ngày, mục “Xem lại trận đấu” cho phép phát lại các ván đã ghi hình của bảng; các trận đã chấm trước khi bật tính năng này không có dữ liệu phát lại.
-4. Mỗi lần nộp thành công trong một ngày sẽ thay thế bài mới nhất. Khi ban tổ chức chốt ngày, hệ thống chụp bản bài hiện tại để chấm ngày đó; bài nộp sau thời điểm chốt được tính cho ngày kế tiếp.
+4. Mỗi lần nộp thành công sẽ thay thế bot hiện tại. Thí sinh đã qua vòng đầu vào luôn có bot; nếu không nộp bot mới trong ngày, hệ thống vẫn dùng bot đã nộp trước đó. Khi ban tổ chức chốt ngày, hệ thống chụp bot hiện tại để chấm ngày đó; bài nộp sau thời điểm chốt được tính cho ngày kế tiếp.
 
 ## Giao thức bot
 Bot là file `.py` đọc stdin / ghi stdout. Mỗi lượt nhận 1 dòng JSON
@@ -32,7 +32,7 @@ Ban tổ chức có thể thao tác trên trang `/admin` hoặc dùng các lện
 
 1. **Trước khi thi**: mở nhận bài, thí sinh đăng ký và nộp bot. Có thể đóng/mở nhận bài từ trang quản trị.
 2. **Chốt đầu vào**: bấm “Chấm đầu vào và chia bảng” trên trang quản trị hoặc chạy `python tournament.py entry-close`. Hệ thống chấm bot dự thi với ba bot BTC, áp dụng ngưỡng đầu vào rồi chia người đạt yêu cầu vào các bảng.
-3. **Mỗi ngày thi**: khi hết hạn nộp, bấm “Chốt bài ngày thi” hoặc chạy `python tournament.py close`. Hệ thống lưu snapshot bài nộp của ngày và chuyển sang ngày tiếp theo. Sau đó bấm “Chấm ngày / xét lên vòng” hoặc chạy `python tournament.py grade`.
+3. **Mỗi ngày thi**: khi hết hạn nộp, bấm “Chốt bài ngày thi” hoặc chạy `python tournament.py close`. Hệ thống lưu snapshot bot hiện tại của mỗi thí sinh (nếu ngày đó không nộp mới thì dùng lại bot đã nộp trước đó) và chuyển sang ngày tiếp theo. Sau đó bấm “Chấm ngày / xét lên vòng” hoặc chạy `python tournament.py grade`.
 4. **Lặp lại** bước chốt và chấm cho đến ngày cuối vòng. Không thể chốt ngày mới khi vẫn còn ngày trước đang chờ chấm.
 5. **Cuối vòng**: khi chấm ngày cuối, hệ thống tự xét người đi tiếp, chia bảng vòng tiếp theo và đặt ngày về 1. Vòng cuối thì giải chuyển sang trạng thái kết thúc.
 
@@ -71,7 +71,7 @@ Một **trận** gồm hai ván, mỗi bên được đi trước một ván. G�
 
 `s` là **điểm ván của A**, không phải điểm trận. Giá trị `s` cũng được cộng vào `gs` của A; `gs` của B nhận giá trị đối dấu. Ví dụ `s = +2` nghĩa là A thắng cả hai ván, nhưng A chỉ được `+1 điểm trận`; `s = 0` nghĩa là trận hòa kể cả khi mỗi bên thắng một ván.
 
-Nếu chỉ một bên không có bài trong snapshot ngày đó, bên đó thua trận (`pts −1`); nếu cả hai bên đều không có bài, trận được tính hòa. Người được bye không đấu trận và không nhận điểm cho lượt đó.
+Không cần nộp lại bot mỗi ngày: thí sinh đã qua vòng đầu vào luôn có bot, và nếu không có bài mới thì hệ thống dùng bot đã nộp trước đó trong snapshot ngày thi. Vì vậy, không nộp lại bot không khiến thí sinh bị trừ điểm. Nếu snapshot thực sự không có bot của một bên thì bên đó bị xử thua (`pts −1`) khi đối thủ có bot; nếu cả hai bên đều không có bot, trận được tính hòa. Người được bye không đấu trận và không nhận điểm cho lượt đó.
 
 ### Xếp hạng ngày và ghép trận
 - Điểm `pts` và `gs` được tính lại từ 0 cho từng ngày.

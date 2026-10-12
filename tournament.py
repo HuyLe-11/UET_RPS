@@ -237,7 +237,7 @@ def grade_day():
                 if i in out:
                     s, games = out[i]
                     replay_log.append((rnd, day, rd + 1, a, b, json.dumps(games)))
-                else:                                      # ai không nộp bài thì thua (không chạy trận)
+                else:                                      # thiếu bot trong snapshot thì không chạy trận
                     s = 0 if not spec(a) and not spec(b) else (-2 if not spec(a) else 2)
                 m = (s > 0) - (s < 0)
                 st = S[g]
