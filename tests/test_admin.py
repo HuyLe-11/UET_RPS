@@ -3,6 +3,8 @@ import re
 import tempfile
 import time
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -184,6 +186,29 @@ class AdminDashboardTests(unittest.TestCase):
             job = self.wait_for_job()
         self.assertEqual(job["state"], "complete")
         self.assertEqual(job["action"], "Chấm đầu vào và chia bảng")
+
+    def test_final_round_persists_and_announces_champion(self):
+        server.T.register("champion")
+        server.T.q(
+            "insert into member(rnd,name,grp,seed) values(1,'champion',0,0)"
+        )
+        server.T.q(
+            "insert into daily values(1,?,0,'champion',3,4,1,1)",
+            (server.T.DAYS,),
+        )
+
+        with (
+            patch.dict(server.T.CFG, {"rounds": [{"groups": 1, "top": 1, "wildcard": 0}]}),
+            redirect_stdout(StringIO()),
+        ):
+            server.T.advance(1)
+
+        self.assertEqual(server.T.get("phase"), "done")
+        self.assertEqual(server.T.get("champion"), "champion")
+        self.assertEqual(server.T.admin_overview()["champion"], "champion")
+        response = self.client.get("/champion")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json, {"champion": "champion"})
 
     def test_tournament_reset_clears_entries_results_and_bot_files(self):
         self.login()

@@ -38,7 +38,7 @@ Ban tổ chức có thể thao tác trên trang `/admin` hoặc dùng các lện
 2. **Chốt đầu vào**: bấm “Chấm đầu vào và chia bảng” trên trang quản trị hoặc chạy `python tournament.py entry-close`. Hệ thống chấm bot dự thi với ba bot đầu vào ở mức cơ bản (đi ngẫu nhiên, ưu tiên tiến gần đích, và đi ngẫu nhiên nhưng thắng nếu có nước thắng ngay), áp dụng ngưỡng đầu vào rồi chia người đạt yêu cầu vào các bảng. Các bot này chỉ dùng để xét đầu vào; bot `btc0`–`btc2` trong `engine.py` được giữ nguyên.
 3. **Mỗi ngày thi**: khi hết hạn nộp, bấm “Chốt bài ngày thi” hoặc chạy `python tournament.py close`. Hệ thống lưu snapshot bot hiện tại của mỗi thí sinh (nếu ngày đó không nộp mới thì dùng lại bot đã nộp trước đó) và chuyển sang ngày tiếp theo. Sau đó bấm “Chấm ngày / xét lên vòng” hoặc chạy `python tournament.py grade`.
 4. **Lặp lại** bước chốt và chấm cho đến ngày cuối vòng. Không thể chốt ngày mới khi vẫn còn ngày trước đang chờ chấm.
-5. **Cuối vòng**: khi chấm ngày cuối, hệ thống tự xét người đi tiếp, chia bảng vòng tiếp theo và đặt ngày về 1. Vòng cuối thì giải chuyển sang trạng thái kết thúc.
+5. **Cuối vòng**: khi chấm ngày cuối, hệ thống tự xét người đi tiếp, chia bảng vòng tiếp theo và đặt ngày về 1. Vòng cuối thì giải chuyển sang trạng thái kết thúc, lưu tên người hạng nhất làm nhà vô địch và thông báo trên trang thí sinh cũng như trang quản trị.
 
 Không bắt buộc bật trang web để chạy phần chấm; các lệnh CLI có thể dùng độc lập. Nếu dùng lịch tự động, giờ chạy `close` là hạn nộp thực tế; cần đảm bảo `grade` chỉ chạy sau khi `close` hoàn tất.
 

@@ -27,6 +27,7 @@
     #notice { display:none; padding:12px 15px; border-radius:10px; margin:0 0 16px; background:#eef2ff; color:#3730a3; }
     #notice.error { display:block; background:#fff0f0; color:#a12b2b; }
     #notice.ok { display:block; background:#eaf8ef; color:#17683a; }
+    #champion-announcement { display:none; padding:16px 18px; border:1px solid #f2c94c; border-radius:12px; margin:0 0 18px; background:#fff8dc; color:#704f00; font-size:1.15rem; font-weight:750; text-align:center; }
     .hidden { display:none; }
     .status { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; }
     .stat { padding:12px; background:#f6f7fb; border-radius:10px; }
@@ -47,6 +48,7 @@
 </head>
 <body>
   <header><div><div class="brand">OTTv2 · BOT TOURNAMENT</div><h1>Thi đấu bot</h1><p>Đăng ký, nộp bot Python và theo dõi kết quả thi đấu.</p></div><a href="/admin">Ban tổ chức</a></header>
+  <div id="champion-announcement" role="status" aria-live="polite"></div>
   <div id="notice" role="status"></div>
   <main class="grid">
     <section class="card" id="register-card">
@@ -106,6 +108,19 @@
     if (!response.ok) throw new Error(data.error || "Yêu cầu không thành công");
     return data;
   }
+  async function refreshChampion() {
+    try {
+      const data = await api("/champion");
+      if (data.champion) {
+        $("champion-announcement").textContent = `🏆 Nhà vô địch cuộc thi: ${data.champion}`;
+        $("champion-announcement").style.display = "block";
+      }
+    } catch (e) {
+      console.error("Không tải được thông tin nhà vô địch.", e);
+    }
+  }
+  refreshChampion();
+  setInterval(refreshChampion, 5000);
   function saveToken(value) {
     $("token").value = value;
     try {

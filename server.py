@@ -100,6 +100,11 @@ def admin_overview():
     return jsonify(T.admin_overview())
 
 
+@app.get("/champion")
+def champion():
+    return jsonify(champion=T.get("champion"))
+
+
 @app.get("/admin/api/job")
 @admin_required
 def admin_job_status():

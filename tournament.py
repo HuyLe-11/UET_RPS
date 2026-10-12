@@ -311,6 +311,11 @@ def advance(rnd):
     ordered = sorted(surv, key=lambda n: strength[n])
     print(f"Vòng {rnd}: {len(surv)} người đi tiếp ({len(top)} top + {len(surv) - len(top)} vé vớt)")
     if rnd == len(CFG["rounds"]):
+        champion = next((r["name"] for r in final if r["rank"] == 1), None)
+        if champion is not None:
+            put("champion", champion)
+        else:
+            q("delete from meta where k='champion'")
         put("phase", "done")
         return
     seat(rnd + 1, ordered)
@@ -414,6 +419,7 @@ def admin_overview():
         "round": rnd or None,
         "day": day or None,
         "pending": pending or None,
+        "champion": get("champion") or None,
         "accepting_submissions": get("accepting_submissions", "1") == "1",
         "counts": {
             row["status"]: row["count"]

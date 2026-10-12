@@ -77,6 +77,7 @@
       $("overview").innerHTML = [
         ["Giai đoạn",data.phase],["Vòng",data.round],["Ngày mở",data.day],
         ["Ngày chờ chấm",data.pending],["Số thí sinh",data.entrants.length],
+        ...(data.champion ? [["Nhà vô địch",data.champion]] : []),
         ["Nhận bài",data.accepting_submissions ? "Đang mở" : "Đang đóng"]
       ].map(([label,value]) => `<div class="stat"><small>${escapeHtml(label)}</small><strong>${escapeHtml(value)}</strong></div>`).join("");
       $("entrants").innerHTML = data.entrants.length ? data.entrants.map(p => `<tr><td>${escapeHtml(p.name)}</td><td>${escapeHtml(p.status)}</td><td>${escapeHtml(p.entry)}</td><td>${escapeHtml(p.group)}</td><td>${p.has_bot ? "Có" : "Chưa"}</td><td>${p.submitted ? "Có" : "Chưa"}</td></tr>`).join("") : `<tr><td colspan="6">Chưa có thí sinh.</td></tr>`;
