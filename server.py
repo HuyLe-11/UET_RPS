@@ -11,6 +11,7 @@ import secrets
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from datetime import timedelta
 from functools import wraps
 
 from flask import Flask, request, jsonify, render_template, send_from_directory, session, redirect, url_for
@@ -20,6 +21,7 @@ app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 70 * 1024
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.secret_key = os.environ.get("FLASK_SECRET_KEY") or os.environ.get("ADMIN_PASSWORD")
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_SECURE"] = os.environ.get("SESSION_COOKIE_SECURE", "").lower() in ("1", "true", "yes")
@@ -77,6 +79,7 @@ def admin():
                                    error="Mật khẩu quản trị không đúng.", csrf=expected), 401
         session.clear()
         session["is_admin"] = True
+        session.permanent = True
         csrf_token()
         return redirect(url_for("admin"))
     if session.get("is_admin"):

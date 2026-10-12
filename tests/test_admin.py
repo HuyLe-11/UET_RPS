@@ -70,6 +70,20 @@ class AdminDashboardTests(unittest.TestCase):
             403,
         )
 
+    def test_admin_login_sets_a_persistent_session_cookie(self):
+        response = self.client.post(
+            "/admin",
+            data={"csrf_token": self.csrf, "password": "test-admin-password"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        cookie = response.headers["Set-Cookie"]
+        self.assertIn("Expires=", cookie)
+        self.assertNotIn("test-admin-password", cookie)
+        with self.client.session_transaction() as session:
+            self.assertTrue(session.permanent)
+        self.assertEqual(self.client.get("/admin").status_code, 200)
+
     def test_submission_switch_is_enforced_and_admin_list_hides_tokens(self):
         self.login()
         response = self.client.post(

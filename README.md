@@ -11,7 +11,10 @@
 ## Quản trị qua website
 - Mở `/admin` và đăng nhập bằng mật khẩu chung cấu hình trong biến môi trường `ADMIN_PASSWORD`.
 - Đặt `ADMIN_PASSWORD` và `FLASK_SECRET_KEY` trong môi trường của máy chủ hoặc terminal chạy ứng dụng; không ghi các giá trị này vào GitHub.
-- Nếu phục vụ website qua HTTPS, đặt `SESSION_COOKIE_SECURE=true`; để chạy local qua HTTP, không đặt biến này.
+- Sau khi đăng nhập, trình duyệt ghi nhớ phiên quản trị trong 30 ngày (không lưu mật khẩu); đăng xuất hoặc xóa cookie sẽ kết thúc phiên.
+- Trên Render, khai báo `ADMIN_PASSWORD`, `FLASK_SECRET_KEY` và `SESSION_COOKIE_SECURE=true` trong **Environment** của Web Service. Dùng cùng `FLASK_SECRET_KEY` qua các lần deploy để phiên đăng nhập còn hiệu lực; không đưa các giá trị này vào GitHub.
+- Nếu chạy local qua HTTP, không đặt `SESSION_COOKIE_SECURE`; tùy chọn này chỉ bật khi website được phục vụ qua HTTPS.
+- Trên Render, dùng Build Command `pip install -r requirements.txt` và Start Command `gunicorn server:app --workers 1 --bind 0.0.0.0:$PORT`.
 - Dùng trang quản trị để mở/đóng nhận bài, xem danh sách thí sinh, chấm đầu vào và chia bảng, chốt ngày, chấm ngày. Chấm ngày cuối tự xét lên vòng theo cấu hình hiện có.
 - Thao tác chấm chạy nền và hiển thị lỗi/trạng thái trên trang. Dùng một Gunicorn worker (`gunicorn server:app --workers 1 --bind 0.0.0.0:$PORT`) để khóa thao tác quản trị trong bộ nhớ có hiệu lực.
 - Nếu triển khai từ GitHub qua một dịch vụ hosting, đẩy thay đổi lên repository và chạy lại quy trình deploy của dịch vụ đó.
