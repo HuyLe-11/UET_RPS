@@ -197,8 +197,43 @@ def btc2(s):  # chấm điểm 1 nước: thắng ngay, ăn quân, tiến gần 
 BTC = [btc0, btc1, btc2]
 
 
+def _entry_btc(s, prioritize_progress=False, take_wins=False):
+    b, me = _decode(s)
+    moves = legal_moves(b, me)
+    if take_wins:
+        for move in moves:
+            if check_win(apply(b, move), me, move):
+                return move
+    if prioritize_progress:
+        x, y = GOAL[me]
+        advancing = [
+            move for move in moves
+            if _dist(move[2], move[3], (x, y)) < _dist(move[0], move[1], (x, y))
+        ]
+        if advancing:
+            return random.choice(advancing)
+    return random.choice(moves)
+
+
+def entry_btc0(s):
+    return _entry_btc(s)
+
+
+def entry_btc1(s):
+    return _entry_btc(s, prioritize_progress=True)
+
+
+def entry_btc2(s):
+    return _entry_btc(s, take_wins=True)
+
+
+ENTRY_BTC = [entry_btc0, entry_btc1, entry_btc2]
+
+
 # ---------------- TRẬN BO2 ----------------
 def make_bot(spec):
+    if spec.startswith("entry:"):
+        return FuncBot(ENTRY_BTC[int(spec[6:])])
     return FuncBot(BTC[int(spec[4:])]) if spec.startswith("btc:") else ProcBot(spec)
 
 

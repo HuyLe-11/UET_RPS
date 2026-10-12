@@ -35,7 +35,7 @@ Loại: 0=Búa, 1=Bao, 2=Kéo. Giới hạn 1s/nước (3s nước đầu), 512M
 Ban tổ chức có thể thao tác trên trang `/admin` hoặc dùng các lệnh CLI trong `tournament.py`:
 
 1. **Trước khi thi**: mở nhận bài, thí sinh đăng ký và nộp bot. Có thể đóng/mở nhận bài từ trang quản trị.
-2. **Chốt đầu vào**: bấm “Chấm đầu vào và chia bảng” trên trang quản trị hoặc chạy `python tournament.py entry-close`. Hệ thống chấm bot dự thi với ba bot BTC, áp dụng ngưỡng đầu vào rồi chia người đạt yêu cầu vào các bảng.
+2. **Chốt đầu vào**: bấm “Chấm đầu vào và chia bảng” trên trang quản trị hoặc chạy `python tournament.py entry-close`. Hệ thống chấm bot dự thi với ba bot đầu vào ở mức cơ bản (đi ngẫu nhiên, ưu tiên tiến gần đích, và đi ngẫu nhiên nhưng thắng nếu có nước thắng ngay), áp dụng ngưỡng đầu vào rồi chia người đạt yêu cầu vào các bảng. Các bot này chỉ dùng để xét đầu vào; bot `btc0`–`btc2` trong `engine.py` được giữ nguyên.
 3. **Mỗi ngày thi**: khi hết hạn nộp, bấm “Chốt bài ngày thi” hoặc chạy `python tournament.py close`. Hệ thống lưu snapshot bot hiện tại của mỗi thí sinh (nếu ngày đó không nộp mới thì dùng lại bot đã nộp trước đó) và chuyển sang ngày tiếp theo. Sau đó bấm “Chấm ngày / xét lên vòng” hoặc chạy `python tournament.py grade`.
 4. **Lặp lại** bước chốt và chấm cho đến ngày cuối vòng. Không thể chốt ngày mới khi vẫn còn ngày trước đang chờ chấm.
 5. **Cuối vòng**: khi chấm ngày cuối, hệ thống tự xét người đi tiếp, chia bảng vòng tiếp theo và đặt ngày về 1. Vòng cuối thì giải chuyển sang trạng thái kết thúc.
@@ -64,7 +64,7 @@ Mỗi thí sinh có bài được đấu hai ván với từng bot BTC; hai bên
 
 **entry = 1 × s0 + 2 × s1 + 3 × s2**
 
-Ví dụ nếu kết quả tổng với ba bot lần lượt là `+2`, `0`, `−1`, thì `entry = 1×2 + 2×0 + 3×(−1) = −1`. Cấu hình giải thường là `entry_cut = 0`: thí sinh có `entry < 0` bị loại; bằng 0 vẫn đạt ngưỡng. Người không có bài để chấm không được vào vòng 1. Chế độ thử `OTT_TEST` và lệnh `demo` thay ngưỡng thành `−99`, nên không dùng ngưỡng đó để kết luận kết quả giải thật.
+Ví dụ nếu kết quả tổng với ba bot lần lượt là `+2`, `0`, `−1`, thì `entry = 1×2 + 2×0 + 3×(−1) = −1`. Ngưỡng đầu vào mặc định là `entry_cut = −2`: thí sinh có `entry < −2` bị loại; bằng −2 vẫn đạt ngưỡng. Người không có bài để chấm không được vào vòng 1. Chế độ thử `OTT_TEST` và lệnh `demo` thay ngưỡng thành `−99`, nên không dùng ngưỡng đó để kết luận kết quả giải thật.
 
 ### Điểm trận trong một ngày
 Một **trận** gồm hai ván, mỗi bên được đi trước một ván. Gọi `s` là tổng kết quả của bot A trong hai ván: thắng `+1`, hòa `0`, thua `−1` cho từng ván. Do đó `s` nằm trong `[-2, 2]`. Ví dụ: A thắng ván đầu và thua ván hai thì `s = +1 + (−1) = 0`.

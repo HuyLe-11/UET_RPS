@@ -16,7 +16,7 @@ import engine
 DB, BOT_DIR, SNAP = "ott.db", "bots", "snaps"
 DAYS, MIN_DAYS, MATCHES = 7, 4, 7         # 6 ngày thường + ngày cuối; nộp >=4/6 ngày mới được đấu ngày cuối
 CFG = dict(
-    entry_cut=0,                          # entry < entry_cut => loại. entry = 1*s0 + 2*s1 + 3*s2, mỗi s thuộc [-2,2]
+    entry_cut=-2,                         # entry < entry_cut => loại. entry = 1*s0 + 2*s1 + 3*s2, mỗi s thuộc [-2,2]
     entry_weights=[1, 2, 3],
     workers=min(os.cpu_count() or 4, 60),   # Windows tối đa 61
     rounds=[                              # groups: số bảng; top: top mỗi bảng đi tiếp; wildcard: vé vớt toàn vòng
@@ -184,7 +184,7 @@ def entry_close():
         p = latest(n)
         if p:
             for i in range(3):
-                tasks.append((p, f"btc:{i}")); idx.append((n, i))
+                tasks.append((p, f"entry:{i}")); idx.append((n, i))
     with Pool(CFG["workers"]) as pool:
         res = pool.map(engine.play_match, tasks, chunksize=2)
     sc = {}
