@@ -149,10 +149,25 @@ def run_close_day():
     return T.admin_overview()
 
 
+def run_tournament_reset():
+    T.reset_tournament()
+    return T.admin_overview()
+
+
+def tournament_reset_running():
+    return (
+        _admin_job
+        and _admin_job["state"] == "running"
+        and _admin_job["action"] == "Reset toàn bộ cuộc thi"
+    )
+
+
 @app.post("/admin/api/actions/<action>")
 @admin_required
 def admin_action(action):
     overview = T.admin_overview()
+    if action == "reset":
+        return start_admin_job("Reset toàn bộ cuộc thi", run_tournament_reset)
     if action == "entry-close":
         if overview["phase"] != "entry":
             return jsonify(ok=False, error="Chỉ có thể chấm đầu vào khi giải đang ở giai đoạn entry."), 409
@@ -199,17 +214,23 @@ def err(e):
 
 @app.post("/register")
 def register():
-    return jsonify(token=T.register((request.get_json(silent=True) or {}).get("name", "")))
+    with _admin_job_lock:
+        if tournament_reset_running():
+            return jsonify(ok=False, error="Cuộc thi đang được reset. Vui lòng thử lại sau."), 503
+        return jsonify(token=T.register((request.get_json(silent=True) or {}).get("name", "")))
 
 
 @app.post("/submit")
 def submit():
-    name = auth()
     f = request.files.get("file")
     if not f:
         raise ValueError("Thiếu file")
-    T.submit(name, f.read())
-    return jsonify(ok=True)
+    with _admin_job_lock:
+        if tournament_reset_running():
+            return jsonify(ok=False, error="Cuộc thi đang được reset. Vui lòng thử lại sau."), 503
+        name = auth()
+        T.submit(name, f.read())
+        return jsonify(ok=True)
 
 
 @app.get("/me")

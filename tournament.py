@@ -67,6 +67,41 @@ def init():
     c = sqlite3.connect(DB); c.executescript(SCHEMA); c.commit(); c.close()
 
 
+def reset_tournament():
+    c = sqlite3.connect(DB, timeout=30)
+    try:
+        c.execute("BEGIN IMMEDIATE")
+        for table in ("match_replays", "matches", "daily", "member", "subs", "users", "meta"):
+            c.execute(f'DELETE FROM "{table}"')
+        c.executemany(
+            "insert into meta(k,v) values(?,?)",
+            [
+                ("phase", "entry"),
+                ("round", "0"),
+                ("day", "0"),
+                ("pending", "0"),
+                ("accepting_submissions", "1"),
+            ],
+        )
+        c.commit()
+    except Exception:
+        c.rollback()
+        raise
+    finally:
+        c.close()
+
+    for path in (BOT_DIR, SNAP):
+        if not os.path.exists(path):
+            continue
+        if not os.path.isdir(path) or os.path.islink(path):
+            raise OSError(f"Không thể reset thư mục dữ liệu không hợp lệ: {path}")
+        for entry in os.scandir(path):
+            if entry.is_dir(follow_symlinks=False):
+                shutil.rmtree(entry.path)
+            else:
+                os.unlink(entry.path)
+
+
 def get(k, d=None):
     r = q("select v from meta where k=?", (k,))
     return r[0][0] if r else d

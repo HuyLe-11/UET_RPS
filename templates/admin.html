@@ -49,8 +49,9 @@
       <button id="entry-close">Chấm đầu vào và chia bảng</button>
       <button class="secondary" id="close-day">Chốt bài ngày thi</button>
       <button id="grade-day">Chấm ngày / xét lên vòng</button>
+      <button class="danger" id="reset-tournament">Reset toàn bộ cuộc thi</button>
     </div>
-    <p>Chấm ngày cuối sẽ tự động xét người đi tiếp và chia bảng vòng sau theo luật hiện có.</p>
+    <p>Chấm ngày cuối sẽ tự động xét người đi tiếp và chia bảng vòng sau theo luật hiện có. Reset sẽ xóa toàn bộ thí sinh, bài nộp và kết quả, rồi mở lại giai đoạn đầu vào.</p>
   </section>
   <section class="card" style="margin-top:16px">
     <h2>Thí sinh</h2>
@@ -84,6 +85,7 @@
       $("entry-close").disabled = data.phase !== "entry" || job.state === "running";
       $("close-day").disabled = data.phase !== "round" || !!data.pending || job.state === "running";
       $("grade-day").disabled = data.phase !== "round" || !data.pending || job.state === "running";
+      $("reset-tournament").disabled = job.state === "running";
       $("toggle-submissions").disabled = data.phase === "done" || job.state === "running";
       if (job.state === "running") message(`Đang chạy: ${job.action}. Có thể mất thời gian; không bấm lại.`, "");
       else if (job.state === "failed") message(`Thao tác "${job.action}" thất bại: ${job.error}`, "error");
@@ -104,6 +106,7 @@
   $("entry-close").onclick = () => runAction("entry-close", "Bắt đầu chấm đầu vào? Thao tác sẽ khóa nộp bài, chấm bot, loại theo điểm và chia bảng.");
   $("close-day").onclick = () => runAction("close-day", "Chốt snapshot bài nộp của ngày hiện tại? Bài nộp sau đó sẽ thuộc ngày kế tiếp.");
   $("grade-day").onclick = () => runAction("grade-day", "Bắt đầu chấm ngày đang chờ? Nếu là ngày cuối, hệ thống sẽ tự xét lên vòng.");
+  $("reset-tournament").onclick = () => runAction("reset", "CẢNH BÁO: thao tác này xóa vĩnh viễn toàn bộ thí sinh, token, bài bot, snapshot và kết quả của cuộc thi trên Render. Sau đó cuộc thi trở về giai đoạn đầu vào và mở nhận bài. Bạn có chắc chắn muốn tiếp tục?");
   $("logout").onclick = async () => { try { await api("/admin/logout", {method:"POST"}); location.href="/admin"; } catch(e) { message(e.message, "error"); } };
   refresh();
   setInterval(refresh, 3000);

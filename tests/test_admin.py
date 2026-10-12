@@ -185,6 +185,43 @@ class AdminDashboardTests(unittest.TestCase):
         self.assertEqual(job["state"], "complete")
         self.assertEqual(job["action"], "Chấm đầu vào và chia bảng")
 
+    def test_tournament_reset_clears_entries_results_and_bot_files(self):
+        self.login()
+        server.T.register("entrant")
+        server.T.submit("entrant", b"print(1)")
+        server.T.put("phase", "round")
+        server.T.put("round", 1)
+        server.T.put("day", 2)
+        server.T.put("pending", 1)
+        server.T.q(
+            "insert into member(rnd,name,grp,seed) values(1,'entrant',0,0)"
+        )
+        server.T.q(
+            "insert into daily values(1,1,0,'entrant',1,1,1,1)"
+        )
+        snapshot = Path(server.T.SNAP) / "r1" / "d1"
+        snapshot.mkdir(parents=True)
+        (snapshot / "entrant.py").write_text("print(1)", encoding="utf-8")
+
+        response = self.client.post(
+            "/admin/api/actions/reset",
+            headers=self.post_headers(),
+        )
+        self.assertEqual(response.status_code, 202)
+        job = self.wait_for_job()
+
+        self.assertEqual(job["state"], "complete")
+        self.assertEqual(job["action"], "Reset toàn bộ cuộc thi")
+        overview = server.T.admin_overview()
+        self.assertEqual(overview["phase"], "entry")
+        self.assertIsNone(overview["round"])
+        self.assertIsNone(overview["day"])
+        self.assertIsNone(overview["pending"])
+        self.assertTrue(overview["accepting_submissions"])
+        self.assertEqual(overview["entrants"], [])
+        self.assertEqual(list(Path(server.T.BOT_DIR).iterdir()), [])
+        self.assertEqual(list(Path(server.T.SNAP).iterdir()), [])
+
     def test_day_close_and_grade_actions_follow_tournament_state(self):
         self.login()
         server.T.put("phase", "round")

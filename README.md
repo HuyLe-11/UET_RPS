@@ -16,6 +16,7 @@
 - Nếu chạy local qua HTTP, không đặt `SESSION_COOKIE_SECURE`; tùy chọn này chỉ bật khi website được phục vụ qua HTTPS.
 - Trên Render, dùng Build Command `pip install -r requirements.txt` và Start Command `gunicorn server:app --workers 1 --bind 0.0.0.0:$PORT`.
 - Dùng trang quản trị để mở/đóng nhận bài, xem danh sách thí sinh, chấm đầu vào và chia bảng, chốt ngày, chấm ngày. Chấm ngày cuối tự xét lên vòng theo cấu hình hiện có.
+- Nút **Reset toàn bộ cuộc thi** trên trang quản trị xóa thí sinh, token, bài nộp, snapshot và kết quả, rồi đưa giải về giai đoạn đầu vào và mở nhận bài. Đây là thao tác không thể hoàn tác.
 - Thao tác chấm chạy nền và hiển thị lỗi/trạng thái trên trang. Dùng một Gunicorn worker (`gunicorn server:app --workers 1 --bind 0.0.0.0:$PORT`) để khóa thao tác quản trị trong bộ nhớ có hiệu lực.
 - Nếu triển khai từ GitHub qua một dịch vụ hosting, đẩy thay đổi lên repository và chạy lại quy trình deploy của dịch vụ đó.
 
