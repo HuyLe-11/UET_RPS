@@ -5,6 +5,12 @@ if not exist server.py (
   pause
   exit /b 1
 )
-call venv\Scripts\activate
-python serve.py
+set "PYTHON=%~dp0venv\Scripts\python.exe"
+if not exist "%PYTHON%" (
+  echo LOI: khong thay Python trong %PYTHON%
+  echo Hay chay setup.bat truoc.
+  pause
+  exit /b 1
+)
+"%PYTHON%" serve.py
 pause

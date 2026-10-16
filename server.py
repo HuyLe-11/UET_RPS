@@ -6,6 +6,7 @@ POST /submit     header X-Token, form file=@bot.py    -> {"ok": true}
 GET  /me         header X-Token                       -> trạng thái, bảng, thứ hạng các ngày
 GET  /leaderboard header X-Token  [?day=3]            -> BXH bảng của mình (ngày mới nhất đã chấm)
 """
+import json
 import os
 import secrets
 import threading
@@ -14,11 +15,11 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from functools import wraps
 
-from flask import Flask, request, jsonify, render_template, send_from_directory, session, redirect, url_for
+from flask import Flask, request, jsonify, render_template, send_file, send_from_directory, session, redirect, url_for
 import tournament as T
 
 app = Flask(__name__)
-app.config["MAX_CONTENT_LENGTH"] = 70 * 1024
+app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.secret_key = os.environ.get("FLASK_SECRET_KEY") or os.environ.get("ADMIN_PASSWORD")
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
@@ -26,6 +27,7 @@ app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_SECURE"] = os.environ.get("SESSION_COOKIE_SECURE", "").lower() in ("1", "true", "yes")
 T.init()
+T.publish_live_tournament_snapshot()
 
 _admin_executor = ThreadPoolExecutor(max_workers=1)
 _admin_job_lock = threading.Lock()
@@ -36,6 +38,25 @@ _admin_job = None
 def home():
     """Giao diện web cho người chơi."""
     return render_template("index.html")
+
+
+@app.get("/live")
+def live_tournament():
+    return render_template("live.html")
+
+
+@app.get("/live-board.json")
+def live_tournament_board():
+    response = send_file(
+        T.LIVE_BOARD_SNAPSHOT,
+        mimetype="application/json",
+        conditional=True,
+        max_age=20,
+    )
+    response.headers["Cache-Control"] = (
+        "public, max-age=10, s-maxage=20, stale-while-revalidate=40"
+    )
+    return response
 
 
 @app.get("/sample_bot.py")
@@ -105,6 +126,11 @@ def champion():
     return jsonify(champion=T.get("champion"))
 
 
+@app.get("/live-leaderboard")
+def live_leaderboard():
+    return jsonify(T.live_leaderboard())
+
+
 @app.get("/admin/api/job")
 @admin_required
 def admin_job_status():
@@ -132,6 +158,16 @@ def run_admin_job(job_id, work):
             if _admin_job and _admin_job["id"] == job_id:
                 _admin_job = {"id": job_id, "action": _admin_job["action"],
                               "state": "failed", "error": f"{type(exc).__name__}: {exc}"}
+                if _admin_job["action"] == "Chấm ngày thi và xét lên vòng nếu là ngày cuối":
+                    try:
+                        progress = json.loads(T.get("live_scoring", "{}"))
+                        if progress:
+                            progress["state"] = "failed"
+                            progress["error"] = f"{type(exc).__name__}: {exc}"
+                            T.put("live_scoring", json.dumps(progress))
+                            T.publish_live_tournament_snapshot()
+                    except (ValueError, TypeError):
+                        app.logger.exception("Could not record live scoring failure")
         app.logger.exception("Admin operation %s failed", job_id)
         return
     with _admin_job_lock:
@@ -154,8 +190,13 @@ def run_close_day():
     return T.admin_overview()
 
 
+def run_tournament_grade():
+    T.grade_day()
+
+
 def run_tournament_reset():
     T.reset_tournament()
+    T.publish_live_tournament_snapshot()
     return T.admin_overview()
 
 
@@ -184,7 +225,7 @@ def admin_action(action):
     if action == "grade-day":
         if overview["phase"] != "round" or not overview["pending"]:
             return jsonify(ok=False, error="Không có ngày thi đang chờ chấm."), 409
-        return start_admin_job("Chấm ngày thi và xét lên vòng nếu là ngày cuối", T.grade_day)
+        return start_admin_job("Chấm ngày thi và xét lên vòng nếu là ngày cuối", run_tournament_grade)
     return jsonify(ok=False, error="Thao tác quản trị không hợp lệ."), 404
 
 
@@ -202,6 +243,20 @@ def admin_submissions():
             return jsonify(ok=False, error="Không thể đổi trạng thái nhận bài khi đang chạy thao tác khác."), 409
         T.put("accepting_submissions", int(accepting))
         return jsonify(T.admin_overview())
+
+
+@app.post("/admin/api/live-scores")
+@admin_required
+def admin_live_scores():
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify(ok=False, error="Nội dung gửi lên phải là JSON object."), 400
+    try:
+        records = T.save_live_scores(payload.get("event"), payload.get("scores"))
+    except ValueError as exc:
+        return jsonify(ok=False, error=str(exc)), 400
+
+    return jsonify(ok=True, saved=len(records)), 201
 
 
 def auth():

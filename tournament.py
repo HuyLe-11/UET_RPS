@@ -9,11 +9,15 @@ CLI (BTC dùng):
   python tournament.py add-bot NAME FILE   # BTC nhập bài hộ (dùng cho vòng offline)
   python tournament.py demo N              # tạo N thí sinh giả để thử cả quy trình
 """
-import os, re, sys, time, random, shutil, secrets, sqlite3, argparse, json
+import os, re, sys, time, random, shutil, secrets, sqlite3, argparse, json, math
+from datetime import datetime, timezone
 from multiprocessing import Pool
 import engine
 
 DB, BOT_DIR, SNAP = "ott.db", "bots", "snaps"
+LIVE_BOARD_SNAPSHOT = os.path.join(
+    os.path.dirname(__file__), "static", "live-board.json"
+)
 DAYS, MIN_DAYS, MATCHES = 7, 4, 7         # 6 ngày thường + ngày cuối; nộp >=4/6 ngày mới được đấu ngày cuối
 CFG = dict(
     entry_cut=-2,                         # entry < entry_cut => loại. entry = 1*s0 + 2*s1 + 3*s2, mỗi s thuộc [-2,2]
@@ -26,6 +30,12 @@ CFG = dict(
         dict(groups=4, top=4, wildcard=4),
         dict(groups=1, top=1, wildcard=0),   # vòng 5: offline
     ])
+LIVE_SCORE_PERSIST_BATCH = 25
+
+
+def _play_indexed_match(args):
+    index, match_args = args
+    return index, engine.play_match_recorded(match_args)
 
 if os.environ.get("OTT_TEST"):      # chế độ thử: 1 bảng, 1 vòng, 3 ngày, 3 trận/ngày, không loại ai ở đầu vào
     DAYS, MIN_DAYS, MATCHES = 3, 0, 3
@@ -38,7 +48,17 @@ create table if not exists subs(name text, rnd int, day int, ts real, primary ke
 create table if not exists meta(k text primary key, v text);
 create table if not exists member(rnd int, name text, grp int, seed int, primary key(rnd,name));
 create table if not exists daily(rnd int, day int, grp int, name text, pts int, gs int, rank int, n int, primary key(rnd,day,name));
+create table if not exists live_scores(
+    id integer primary key autoincrement,
+    event text not null,
+    name text not null,
+    score real not null,
+    updated_at text not null,
+    unique(event,name)
+);
 create table if not exists matches(rnd int, day int, rd int, a text, b text, s int);
+create index if not exists idx_matches_round_day on matches(rnd,day);
+create index if not exists idx_member_round_group_seed on member(rnd,grp,seed);
 create table if not exists match_replays(
     rnd int, day int, rd int, a text, b text, games text,
     primary key(rnd,day,rd,a,b)
@@ -64,7 +84,11 @@ def qm(sql, rows):
 
 
 def init():
-    c = sqlite3.connect(DB); c.executescript(SCHEMA); c.commit(); c.close()
+    c = sqlite3.connect(DB)
+    c.execute("pragma journal_mode=wal")
+    c.executescript(SCHEMA)
+    c.commit()
+    c.close()
 
 
 def reset_tournament():
@@ -252,42 +276,122 @@ def grade_day():
         names.sort(key=lambda n: (sum(hist[n]) / len(hist[n]) if n in hist else 0, seed[n]))
         S[g] = dict(order=names, pts={n: 0 for n in names}, gs={n: 0 for n in names}, played=set(), byes=set())
 
+    total_matches = sum(len(st["order"]) // 2 for st in S.values()) * MATCHES
+    q("delete from matches where rnd=? and day=?", (rnd, day))
+    q("delete from match_replays where rnd=? and day=?", (rnd, day))
+    progress = {
+        "state": "running",
+        "round": rnd,
+        "day": day,
+        "completed_rounds": 0,
+        "total_rounds": MATCHES,
+        "completed_matches": 0,
+        "total_matches": total_matches,
+    }
+    put("live_scoring", json.dumps(progress))
+    put("live_scoring_queue", "[]")
+    put("live_scoring_completed", "[]")
+    last_snapshot = 0.0
+
     def spec(n):
         p = f"{SNAP}/r{rnd}/d{day}/{n}.py"
         return p if os.path.exists(p) else None
 
-    log = []
-    replay_log = []
     with Pool(CFG["workers"]) as pool:
         for rd in range(MATCHES):
             todo = []
+            pending_matches = []
+            pending_replays = []
+            last_persist = time.monotonic()
             for g, st in S.items():
                 pairs, bye = make_pairs(st, rd)
                 if bye:
                     st["byes"].add(bye)
                 todo += [(g, a, b) for a, b in pairs]
+            queue = [
+                {"group": group, "a": player_a, "b": player_b}
+                for group, player_a, player_b in todo
+            ]
+            completed_queue_positions = []
+            put("live_scoring_queue", json.dumps(queue))
+            put("live_scoring_completed", "[]")
+            progress["current_round"] = rd + 1
+            progress["current_matches"] = len(todo)
+            publish_queue = True
             real = [i for i, (g, a, b) in enumerate(todo) if spec(a) and spec(b)]
-            out = dict(zip(real, pool.map(engine.play_match_recorded, [(spec(todo[i][1]), spec(todo[i][2])) for i in real], chunksize=2)))
-            for i, (g, a, b) in enumerate(todo):
-                if i in out:
-                    s, games = out[i]
-                    replay_log.append((rnd, day, rd + 1, a, b, json.dumps(games)))
-                else:                                      # thiếu bot trong snapshot thì không chạy trận
-                    s = 0 if not spec(a) and not spec(b) else (-2 if not spec(a) else 2)
+            def record_result(i, s, games=None):
+                nonlocal last_persist
+                g, a, b = todo[i]
                 m = (s > 0) - (s < 0)
                 st = S[g]
                 st["pts"][a] += m; st["pts"][b] -= m; st["gs"][a] += s; st["gs"][b] -= s
                 st["played"].add(frozenset((a, b)))
-                log.append((rnd, day, rd + 1, a, b, s))
+                pending_matches.append((rnd, day, rd + 1, a, b, s))
+                if games is not None:
+                    pending_replays.append((rnd, day, rd + 1, a, b, json.dumps(games)))
+                progress["completed_matches"] += 1
+                completed_queue_positions.append(i)
+
+            def persist_progress(round_complete=False):
+                nonlocal last_persist, last_snapshot, publish_queue
+                if pending_matches:
+                    qm("insert into matches values(?,?,?,?,?,?)", pending_matches)
+                    qm("insert or replace into match_replays values(?,?,?,?,?,?)", pending_replays)
+                    pending_matches.clear()
+                    pending_replays.clear()
+                if round_complete:
+                    progress["completed_rounds"] = rd + 1
+                put(
+                    "live_scoring_completed",
+                    json.dumps(sorted(completed_queue_positions)),
+                )
+                put("live_scoring", json.dumps(progress))
+                last_persist = time.monotonic()
+                if (
+                    publish_queue
+                    or round_complete
+                    or time.monotonic() - last_snapshot >= 20
+                ):
+                    publish_live_tournament_snapshot()
+                    last_snapshot = time.monotonic()
+                    publish_queue = False
+
+            persist_progress()
+
+            for i, (g, a, b) in enumerate(todo):
+                if i not in real:
+                    s = 0 if not spec(a) and not spec(b) else (-2 if not spec(a) else 2)
+                    record_result(i, s)
+
+            indexed_args = (
+                (i, (spec(todo[i][1]), spec(todo[i][2])))
+                for i in real
+            )
+            for i, result in pool.imap_unordered(
+                _play_indexed_match, indexed_args, chunksize=1
+            ):
+                s, games = result
+                record_result(i, s, games)
+                now = time.monotonic()
+                if (
+                    len(pending_matches) >= LIVE_SCORE_PERSIST_BATCH
+                    or now - last_persist >= 1
+                ):
+                    persist_progress()
+
+            persist_progress(round_complete=True)
             print(f"  trận {rd + 1}/{MATCHES} xong ({len(todo)} cặp)")
     rows = []
     for g, st in S.items():
         rk = sorted(st["order"], key=lambda n: (-st["pts"][n], -st["gs"][n], st["order"].index(n)))
         rows += [(rnd, day, g, n, st["pts"][n], st["gs"][n], i + 1, len(rk)) for i, n in enumerate(rk)]
     qm("insert or replace into daily values(?,?,?,?,?,?,?,?)", rows)
-    qm("insert into matches values(?,?,?,?,?,?)", log)
-    qm("insert or replace into match_replays values(?,?,?,?,?,?)", replay_log)
     put("pending", 0)
+    progress["state"] = "complete"
+    put("live_scoring", json.dumps(progress))
+    put("live_scoring_queue", "[]")
+    put("live_scoring_completed", "[]")
+    publish_live_tournament_snapshot()
     print(f"Đã chấm vòng {rnd} ngày {day}")
     if day == DAYS:
         advance(rnd)
@@ -346,6 +450,281 @@ def leaderboard(name, day=None):
         day = d or 0
     return [dict(r) for r in q("select rank,name,pts,gs from daily where rnd=? and day=? and grp=? order by rank",
                                (rnd, day, m[0]["grp"]))]
+
+
+def live_tournament_board():
+    raw_progress = get("live_scoring")
+    if not raw_progress:
+        return {
+            "state": "idle",
+            "round": int(get("round", 0) or 0) or None,
+            "day": None,
+            "completed_rounds": 0,
+            "total_rounds": MATCHES,
+            "completed_matches": 0,
+            "total_matches": 0,
+            "groups": [],
+        }
+
+    progress = json.loads(raw_progress)
+    rnd, day = progress["round"], progress["day"]
+    members = q(
+        "select name,grp,seed from member where rnd=? order by grp,seed",
+        (rnd,),
+    )
+    history = {}
+    for row in q("select name,rank from daily where rnd=? and day<?", (rnd, day)):
+        history.setdefault(row["name"], []).append(row["rank"])
+    submission_counts = {
+        row["name"]: row["count"]
+        for row in q(
+            "select name,count(*) count from subs where rnd=? and day<? group by name",
+            (rnd, DAYS),
+        )
+    }
+    scores = {
+        row["name"]: {
+            "pts": row["pts"],
+            "gs": row["gs"],
+            "matches_played": row["matches_played"],
+        }
+        for row in q(
+            """select name,sum(pts) pts,sum(gs) gs,sum(match_count) matches_played
+               from (
+                   select a name,case when s>0 then 1 when s<0 then -1 else 0 end pts,
+                          s gs,1 match_count
+                   from matches where rnd=? and day=?
+                   union all
+                   select b name,case when s>0 then -1 when s<0 then 1 else 0 end pts,
+                          -s gs,1 match_count
+                   from matches where rnd=? and day=?
+               )
+               group by name""",
+            (rnd, day, rnd, day),
+        )
+    }
+
+    grouped = {}
+    for row in members:
+        if day == DAYS and submission_counts.get(row["name"], 0) < MIN_DAYS:
+            continue
+        grouped.setdefault(row["grp"], []).append(row)
+
+    groups = []
+    for group_id, entrants in sorted(grouped.items()):
+        entrants.sort(key=lambda row: (
+            sum(history.get(row["name"], [])) / len(history[row["name"]])
+            if history.get(row["name"]) else 0,
+            row["seed"],
+        ))
+        initial_order = {
+            entrant["name"]: index for index, entrant in enumerate(entrants)
+        }
+        standings = []
+        for row in entrants:
+            score = scores.get(
+                row["name"],
+                {"pts": 0, "gs": 0, "matches_played": 0},
+            )
+            standings.append({
+                "name": row["name"],
+                "pts": score["pts"],
+                "gs": score["gs"],
+                "matches_played": score["matches_played"],
+            })
+        standings.sort(key=lambda row: (
+            -row["pts"],
+            -row["gs"],
+            initial_order[row["name"]],
+        ))
+        for rank, standing in enumerate(standings, start=1):
+            standing["rank"] = rank
+        groups.append({
+            "group": group_id,
+            "matches_played": sum(
+                scores.get(row["name"], {}).get("matches_played", 0)
+                for row in entrants
+            ) // 2,
+            "entrants": standings,
+        })
+
+    return {**progress, "groups": groups}
+
+
+def publish_live_tournament_snapshot():
+    board = live_tournament_board()
+    queue = json.loads(get("live_scoring_queue", "[]"))
+    completed = set(json.loads(get("live_scoring_completed", "[]")))
+    queue_position_by_player = {}
+    queue_ahead_by_position = []
+    completed_before = 0
+    for index, match in enumerate(queue):
+        queue_ahead_by_position.append(index - completed_before)
+        if index in completed:
+            completed_before += 1
+        queue_position_by_player[match["a"].lower()] = index
+        queue_position_by_player[match["b"].lower()] = index
+
+    visible_groups = []
+    players = {}
+    for group in board["groups"]:
+        matches_per_round = len(group["entrants"]) // 2
+        group_matches_total = matches_per_round * MATCHES
+        group_rounds_completed = (
+            min(MATCHES, group["matches_played"] // matches_per_round)
+            if matches_per_round else board.get("completed_rounds", 0)
+        )
+        group_complete = bool(
+            board["state"] == "complete"
+            or group["matches_played"] >= group_matches_total > 0
+            or group_matches_total == 0
+            and board.get("completed_rounds", 0) >= MATCHES
+        )
+        if group_complete:
+            visible_groups.append(group)
+
+        for entrant in group["entrants"]:
+            position = queue_position_by_player.get(entrant["name"].lower())
+            match_complete = (
+                position in completed if position is not None else False
+            )
+            queue_ahead = (
+                queue_ahead_by_position[position]
+                if position is not None and not match_complete else None
+            )
+            if board["state"] == "idle":
+                personal_state = "waiting"
+            elif board["state"] == "failed":
+                personal_state = "failed"
+            elif match_complete:
+                personal_state = "complete"
+            elif queue_ahead is not None:
+                personal_state = "queued"
+            else:
+                personal_state = "bye"
+            players[entrant["name"].lower()] = {
+                "name": entrant["name"],
+                "group": group["group"],
+                "state": personal_state,
+                "matches_played": entrant["matches_played"],
+                "total_matches": MATCHES,
+                "group_matches_played": group["matches_played"],
+                "group_matches_total": group_matches_total,
+                "group_matches_remaining": max(
+                    0, group_matches_total - group["matches_played"]
+                ),
+                "rounds_remaining": max(
+                    0, board.get("total_rounds", MATCHES)
+                    - board.get("completed_rounds", 0)
+                ),
+                "group_rounds_remaining": max(
+                    0, MATCHES - group_rounds_completed
+                ),
+                "queue_ahead": queue_ahead,
+                "group_complete": group_complete,
+            }
+
+    snapshot = {
+        **board,
+        "groups": board["groups"] if board["state"] == "complete" else visible_groups,
+        "players": players,
+        "generated_at": time.time(),
+    }
+    directory = os.path.dirname(LIVE_BOARD_SNAPSHOT)
+    os.makedirs(directory, exist_ok=True)
+    temporary_path = f"{LIVE_BOARD_SNAPSHOT}.tmp"
+    with open(temporary_path, "w", encoding="utf-8") as snapshot_file:
+        json.dump(snapshot, snapshot_file, ensure_ascii=False, separators=(",", ":"))
+    os.replace(temporary_path, LIVE_BOARD_SNAPSHOT)
+    return snapshot
+
+
+def save_live_scores(event, scores):
+    """Save one judging session; re-entering a contestant updates that session's score."""
+    if not isinstance(event, str) or not event.strip() or len(event.strip()) > 80:
+        raise ValueError("Tên lần chấm phải dài từ 1 đến 80 ký tự.")
+    if not isinstance(scores, list) or not scores:
+        raise ValueError("Nhập điểm cho ít nhất một thí sinh.")
+
+    clean_scores = {}
+    for item in scores:
+        if not isinstance(item, dict):
+            raise ValueError("Mỗi điểm phải có tên thí sinh và điểm số.")
+        name, score = item.get("name"), item.get("score")
+        if not isinstance(name, str) or not name:
+            raise ValueError("Tên thí sinh không hợp lệ.")
+        if isinstance(score, bool) or not isinstance(score, (int, float)) or not math.isfinite(score):
+            raise ValueError(f"Điểm của {name} phải là số hữu hạn.")
+        if name in clean_scores:
+            raise ValueError(f"Thí sinh {name} bị nhập trùng trong lần chấm.")
+        clean_scores[name] = float(score)
+
+    conn = sqlite3.connect(DB, timeout=30)
+    conn.row_factory = sqlite3.Row
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        names = list(clean_scores)
+        known = set()
+        for offset in range(0, len(names), 500):
+            batch = names[offset:offset + 500]
+            placeholders = ",".join("?" for _ in batch)
+            known.update(
+                row[0]
+                for row in conn.execute(
+                    f"select name from users where name in ({placeholders})",
+                    batch,
+                )
+            )
+        unknown = sorted(set(names) - known)
+        if unknown:
+            raise ValueError(f"Không tìm thấy thí sinh: {', '.join(unknown)}.")
+        timestamp = datetime.now(timezone.utc).isoformat(timespec="microseconds")
+        conn.executemany(
+            """insert into live_scores(event,name,score,updated_at) values(?,?,?,?)
+               on conflict(event,name) do update
+               set score=excluded.score, updated_at=excluded.updated_at""",
+            [(event.strip(), name, score, timestamp) for name, score in clean_scores.items()],
+        )
+        records = [
+            dict(row)
+            for row in conn.execute(
+                """select id,event,name,score,updated_at from live_scores
+                   where event=? and name in ({}) order by id""".format(
+                    ",".join("?" for _ in clean_scores)
+                ),
+                (event.strip(), *clean_scores),
+            ).fetchall()
+        ]
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+    return records
+
+
+def live_leaderboard():
+    totals = q(
+        """select name,sum(score) total,max(updated_at) updated_at
+           from live_scores group by name order by total desc,name"""
+    )
+    rows = []
+    previous_total = None
+    rank = 0
+    for index, row in enumerate(totals, start=1):
+        total = row["total"]
+        if total != previous_total:
+            rank = index
+            previous_total = total
+        rows.append({
+            "rank": rank,
+            "name": row["name"],
+            "total": total,
+            "updated_at": row["updated_at"],
+        })
+    return rows
 
 
 def replays(name, rnd=None, day=None):

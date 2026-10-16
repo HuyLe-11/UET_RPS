@@ -16,6 +16,9 @@
 - Nếu chạy local qua HTTP, không đặt `SESSION_COOKIE_SECURE`; tùy chọn này chỉ bật khi website được phục vụ qua HTTPS.
 - Trên Render, dùng Build Command `pip install -r requirements.txt` và Start Command `gunicorn server:app --workers 1 --bind 0.0.0.0:$PORT`.
 - Dùng trang quản trị để mở/đóng nhận bài, xem danh sách thí sinh, chấm đầu vào và chia bảng, chốt ngày, chấm ngày. Chấm ngày cuối tự xét lên vòng theo cấu hình hiện có.
+- **Tiến độ chấm** tại `/live` đọc file snapshot `static/live-board.json`, được cập nhật khoảng 20 giây một lần và ở ranh giới lượt chấm. Trong lúc chấm, trang chỉ hiện tiến độ cá nhân và bảng của thí sinh khi bảng đó hoàn tất; toàn bộ bảng chỉ hiện khi ngày chấm xong. Snapshot được ghi nguyên tử để lượt tải không gặp file dở dang.
+- SQLite chạy ở chế độ WAL để trình duyệt có thể đọc bảng trong khi tiến trình chấm ghi kết quả. Google Sheets không nằm trong quy trình chạy; ứng dụng không cần credential Google, không gửi dữ liệu lên Sheet và không cần cài `gspread`.
+- Trang cập nhật snapshot khoảng 15–20 giây/lần, có độ lệch ngẫu nhiên giữa trình duyệt. Endpoint JSON đặt cache công khai để CDN/reverse proxy có thể dùng chung một snapshot; hãy bật cache/CDN cho `/live-board.json` nếu dự kiến nhiều người xem cùng lúc.
 - Nút **Reset toàn bộ cuộc thi** trên trang quản trị xóa thí sinh, token, bài nộp, snapshot và kết quả, rồi đưa giải về giai đoạn đầu vào và mở nhận bài. Đây là thao tác không thể hoàn tác.
 - Thao tác chấm chạy nền và hiển thị lỗi/trạng thái trên trang. Dùng một Gunicorn worker (`gunicorn server:app --workers 1 --bind 0.0.0.0:$PORT`) để khóa thao tác quản trị trong bộ nhớ có hiệu lực.
 - Nếu triển khai từ GitHub qua một dịch vụ hosting, đẩy thay đổi lên repository và chạy lại quy trình deploy của dịch vụ đó.
@@ -44,7 +47,7 @@ Không bắt buộc bật trang web để chạy phần chấm; các lệnh CLI 
 
 ## Quy trình vận hành
 ```bash
-pip install flask
+pip install flask waitress
 python server.py                    # mở cổng nhận bài (nên đặt sau nginx + HTTPS)
 
 # Hết hạn thi đầu vào:
@@ -95,7 +98,7 @@ Ví dụ trong bảng 10 người, hạng 2 tương ứng `(2−1)/10 = 0,1`; h�
 Quy mô hiện được đặt trong `CFG["rounds"]` của `tournament.py`:
 
 | Vòng | Số bảng | Top mỗi bảng | Vé vớt toàn vòng | Tổng suất đi tiếp theo cấu hình |
-|---|---:|---:|---:|---:|
+|---   |---:|---:|---:|---:|
 | 1 | 40 | 10 | 40 | 440 |
 | 2 | 16 | 8 | 16 | 144 |
 | 3 | 8 | 6 | 8 | 56 |
@@ -123,6 +126,6 @@ python engine.py test sample_bot.py # thử bot mẫu với ba bot BTC
 
 ## Bảo mật & hiệu năng (đọc trước khi chạy thật)
 - Sandbox trong `ProcBot` chỉ dùng rlimit. Vì chạy code lạ của 4000 người, **hãy chạy `grade`/`entry-close` trong container** (docker `--network none --read-only --cap-drop ALL`, user không đặc quyền), hoặc bọc bằng nsjail/bubblewrap.
-- Không endpoint nào trả code bài nộp; chỉ `/leaderboard` công khai thứ hạng trong bảng của chính thí sinh.
+- Không endpoint nào trả code bài nộp; các API tài khoản vẫn yêu cầu token để xem thông tin cá nhân.
 - Tốc độ: đo thử ~0.15s/ván/lõi (chủ yếu khởi động Python). 2000 người ⇒ ~14.000 ván/ngày ⇒ cần máy ~16–32 lõi để chấm gọn trong khung 1h–5h; thiếu thì giảm `MATCHES` hoặc tăng worker.
 - Đã test: luật, bot, entry, 7 ngày vòng 1 với 36 người (có người không nộp), xét lên vòng và chia bảng vòng 2. Chưa test tải 4000 người.

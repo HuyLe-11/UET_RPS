@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import tempfile
@@ -21,7 +22,9 @@ class AdminDashboardTests(unittest.TestCase):
         server.T.DB = str(root / "ott.db")
         server.T.BOT_DIR = str(root / "bots")
         server.T.SNAP = str(root / "snaps")
+        server.T.LIVE_BOARD_SNAPSHOT = str(root / "static" / "live-board.json")
         server.T.init()
+        server.T.publish_live_tournament_snapshot()
         with server._admin_job_lock:
             server._admin_job = None
         self.client = server.app.test_client()
@@ -66,11 +69,214 @@ class AdminDashboardTests(unittest.TestCase):
             401,
         )
         self.login()
-        self.assertEqual(self.client.get("/admin/api/overview").status_code, 200)
+        overview = self.client.get("/admin/api/overview")
+        self.assertEqual(overview.status_code, 200)
+        self.assertNotIn("google_sheets_configured", overview.json)
         self.assertEqual(
             self.client.post("/admin/api/submissions", json={"accepting": False}).status_code,
             403,
         )
+
+    def test_local_live_scores_are_upserted_and_published_publicly(self):
+        self.login()
+        server.T.register("entrant")
+        server.T.register("challenger")
+        server.T.register("third")
+        response = self.client.post(
+            "/admin/api/live-scores",
+            json={
+                "event": "Vòng 1",
+                "scores": [{"name": "entrant", "score": 7.5}],
+            },
+            headers=self.post_headers(),
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json, {"ok": True, "saved": 1})
+
+        response = self.client.post(
+            "/admin/api/live-scores",
+            json={
+                "event": "Vòng 1",
+                "scores": [{"name": "entrant", "score": 9}],
+            },
+            headers=self.post_headers(),
+        )
+        self.assertEqual(response.status_code, 201)
+
+        response = self.client.post(
+            "/admin/api/live-scores",
+            json={
+                "event": "Vòng 2",
+                "scores": [
+                    {"name": "entrant", "score": 1},
+                    {"name": "challenger", "score": 10},
+                    {"name": "third", "score": 2},
+                ],
+            },
+            headers=self.post_headers(),
+        )
+        self.assertEqual(response.status_code, 201)
+
+        rows = self.client.get("/live-leaderboard").json
+        self.assertEqual(
+            [(row["rank"], row["name"], row["total"]) for row in rows],
+            [(1, "challenger", 10), (1, "entrant", 10), (3, "third", 2)],
+        )
+
+    def test_live_score_validation_rejects_unknown_players_and_bool_scores(self):
+        self.login()
+        server.T.register("entrant")
+        response = self.client.post(
+            "/admin/api/live-scores",
+            json={"event": "Vòng 1", "scores": [{"name": "unknown", "score": 1}]},
+            headers=self.post_headers(),
+        )
+        self.assertEqual(response.status_code, 400)
+        response = self.client.post(
+            "/admin/api/live-scores",
+            json={"event": "Vòng 1", "scores": [{"name": "entrant", "score": True}]},
+            headers=self.post_headers(),
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(self.client.get("/live-leaderboard").json, [])
+
+    def test_static_live_snapshot_hides_partial_tables_and_keeps_personal_progress(self):
+        server.T.register("entrant")
+        server.T.register("challenger")
+        server.T.register("third")
+        server.T.q(
+            "insert into member(rnd,name,grp,seed) values(1,?,?,?)",
+            ("entrant", 1, 1),
+        )
+        server.T.q(
+            "insert into member(rnd,name,grp,seed) values(1,?,?,?)",
+            ("challenger", 1, 2),
+        )
+        server.T.q(
+            "insert into member(rnd,name,grp,seed) values(1,?,?,?)",
+            ("third", 2, 1),
+        )
+        server.T.put("live_scoring", '{"state":"running","round":1,"day":1,"completed_rounds":1,"total_rounds":3,"completed_matches":1,"total_matches":3}')
+
+        server.T.put(
+            "live_scoring_queue",
+            json.dumps([
+                {"group": 2, "a": "another_a", "b": "another_b"},
+                {"group": 1, "a": "entrant", "b": "challenger"},
+            ]),
+        )
+        server.T.put("live_scoring_completed", "[0]")
+        server.T.publish_live_tournament_snapshot()
+        with patch.object(
+            server.T,
+            "live_tournament_board",
+            side_effect=AssertionError("Static file reads must not query SQLite"),
+        ):
+            response = self.client.get("/live-board.json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("s-maxage=20", response.headers["Cache-Control"])
+        self.assertEqual(response.json["completed_rounds"], 1)
+        self.assertEqual(response.json["groups"], [])
+        self.assertEqual(response.json["players"]["entrant"]["group"], 1)
+        self.assertEqual(response.json["players"]["entrant"]["matches_played"], 0)
+        self.assertFalse(response.json["players"]["entrant"]["group_complete"])
+        self.assertEqual(response.json["players"]["entrant"]["queue_ahead"], 0)
+        response.close()
+
+    def test_live_board_reveals_only_completed_personal_group(self):
+        server.T.register("entrant")
+        server.T.register("challenger")
+        server.T.q(
+            "insert into member(rnd,name,grp,seed) values(1,'entrant',1,1)"
+        )
+        server.T.q(
+            "insert into member(rnd,name,grp,seed) values(1,'challenger',1,2)"
+        )
+        for match_round in range(1, server.T.MATCHES + 1):
+            server.T.q(
+                "insert into matches values(1,1,?,'entrant','challenger',1)",
+                (match_round,),
+            )
+        server.T.put(
+            "live_scoring",
+            json.dumps({
+                "state": "running",
+                "round": 1,
+                "day": 1,
+                "completed_rounds": 2,
+                "total_rounds": server.T.MATCHES,
+                "completed_matches": server.T.MATCHES,
+                "total_matches": server.T.MATCHES,
+            }),
+        )
+        server.T.publish_live_tournament_snapshot()
+
+        response = self.client.get("/live-board.json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json["players"]["entrant"]["group_complete"])
+        self.assertEqual([group["group"] for group in response.json["groups"]], [1])
+        self.assertEqual(
+            [row["name"] for row in response.json["groups"][0]["entrants"]],
+            ["entrant", "challenger"],
+        )
+        first_group = response.json["groups"][0]["entrants"]
+        self.assertEqual(
+            [(row["rank"], row["name"], row["pts"], row["gs"], row["matches_played"])
+             for row in first_group],
+            [
+                (1, "entrant", server.T.MATCHES, server.T.MATCHES, server.T.MATCHES),
+                (2, "challenger", -server.T.MATCHES, -server.T.MATCHES, server.T.MATCHES),
+            ],
+        )
+        response.close()
+
+    def test_grade_day_persists_live_progress_after_each_round(self):
+        server.T.put("round", 1)
+        server.T.put("pending", 1)
+        server.T.q(
+            "insert into member(rnd,name,grp,seed) values(1,'entrant',1,1)"
+        )
+        server.T.q(
+            "insert into member(rnd,name,grp,seed) values(1,'challenger',1,2)"
+        )
+        class InlinePool:
+            def __init__(self, workers):
+                self.workers = workers
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, traceback):
+                return False
+
+            def map(self, function, args, chunksize):
+                return [function(arg) for arg in args]
+
+            def imap_unordered(self, function, args, chunksize):
+                return (function(arg) for arg in args)
+
+        with patch.object(server.T, "Pool", InlinePool):
+            with redirect_stdout(StringIO()):
+                server.T.grade_day()
+
+        snapshot = json.loads(Path(server.T.LIVE_BOARD_SNAPSHOT).read_text(encoding="utf-8"))
+        self.assertEqual(snapshot["completed_rounds"], server.T.MATCHES)
+        self.assertEqual(snapshot["state"], "complete")
+        self.assertEqual(snapshot["completed_matches"], server.T.MATCHES)
+        self.assertEqual(len(snapshot["groups"]), 1)
+        self.assertEqual(
+            [row["matches_played"] for row in snapshot["groups"][0]["entrants"]],
+            [server.T.MATCHES, server.T.MATCHES],
+        )
+
+    def test_sheet_sync_api_is_removed(self):
+        routes = {rule.rule for rule in server.app.url_map.iter_rules()}
+        self.assertNotIn("/live-leaderboard-source", routes)
+        self.assertNotIn("/admin/api/live-tournament-board/sync", routes)
+        self.assertNotIn("/admin/api/live-scores/sync", routes)
+        self.assertNotIn("/api/live-tournament-board", routes)
 
     def test_admin_login_sets_a_persistent_session_cookie(self):
         response = self.client.post(

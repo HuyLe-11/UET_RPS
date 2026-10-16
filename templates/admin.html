@@ -31,6 +31,7 @@
     th,td { text-align:left; padding:10px 8px; border-bottom:1px solid #edf0f5; }
     th { color:#647087; font-size:.86rem; }
     code { overflow-wrap:anywhere; }
+    input { width:100%; padding:9px 10px; border:1px solid #d8deea; border-radius:8px; font:inherit; }
     @media(max-width:600px) { body { padding:18px 12px 36px; } }
   </style>
 </head>
@@ -59,10 +60,16 @@
       <table><thead><tr><th>Tên</th><th>Trạng thái</th><th>Điểm đầu vào</th><th>Bảng hiện tại</th><th>Có bot</th><th>Đã nộp kỳ này</th></tr></thead><tbody id="entrants"></tbody></table>
     </div>
   </section>
+  <section class="card" style="margin-top:16px">
+    <h2>Tiến độ chấm</h2>
+    <p>Tiến độ được ghi thành snapshot JSON định kỳ. Thí sinh xem số trận đã chấm; bảng riêng chỉ mở khi bảng đấu hoàn tất, toàn bộ bảng mở sau khi ngày chấm kết thúc.</p>
+    <a href="/live" target="_blank" rel="noopener">Mở trang tiến độ chấm</a>
+  </section>
 <script>
   const csrf = {{ csrf|tojson }};
   const $ = id => document.getElementById(id);
   const escapeHtml = value => String(value ?? "—").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
+  let entrantsFingerprint = "";
   function message(text, kind = "") { $("notice").textContent = text; $("notice").className = `notice ${kind}`.trim(); }
   async function api(path, options = {}) {
     const response = await fetch(path, {...options, headers:{...(options.headers || {}), ...(options.method === "POST" ? {"X-CSRF-Token":csrf} : {})}});
@@ -80,7 +87,11 @@
         ...(data.champion ? [["Nhà vô địch",data.champion]] : []),
         ["Nhận bài",data.accepting_submissions ? "Đang mở" : "Đang đóng"]
       ].map(([label,value]) => `<div class="stat"><small>${escapeHtml(label)}</small><strong>${escapeHtml(value)}</strong></div>`).join("");
-      $("entrants").innerHTML = data.entrants.length ? data.entrants.map(p => `<tr><td>${escapeHtml(p.name)}</td><td>${escapeHtml(p.status)}</td><td>${escapeHtml(p.entry)}</td><td>${escapeHtml(p.group)}</td><td>${p.has_bot ? "Có" : "Chưa"}</td><td>${p.submitted ? "Có" : "Chưa"}</td></tr>`).join("") : `<tr><td colspan="6">Chưa có thí sinh.</td></tr>`;
+      const fingerprint = JSON.stringify(data.entrants);
+      if (fingerprint !== entrantsFingerprint) {
+        entrantsFingerprint = fingerprint;
+        $("entrants").innerHTML = data.entrants.length ? data.entrants.map(p => `<tr><td>${escapeHtml(p.name)}</td><td>${escapeHtml(p.status)}</td><td>${escapeHtml(p.entry)}</td><td>${escapeHtml(p.group)}</td><td>${p.has_bot ? "Có" : "Chưa"}</td><td>${p.submitted ? "Có" : "Chưa"}</td></tr>`).join("") : `<tr><td colspan="6">Chưa có thí sinh.</td></tr>`;
+      }
       $("toggle-submissions").textContent = data.accepting_submissions ? "Đóng nhận bài" : "Mở nhận bài";
       $("toggle-submissions").dataset.open = String(data.accepting_submissions);
       $("entry-close").disabled = data.phase !== "entry" || job.state === "running";
@@ -107,10 +118,10 @@
   $("entry-close").onclick = () => runAction("entry-close", "Bắt đầu chấm đầu vào? Thao tác sẽ khóa nộp bài, chấm bot, loại theo điểm và chia bảng.");
   $("close-day").onclick = () => runAction("close-day", "Chốt snapshot bài nộp của ngày hiện tại? Bài nộp sau đó sẽ thuộc ngày kế tiếp.");
   $("grade-day").onclick = () => runAction("grade-day", "Bắt đầu chấm ngày đang chờ? Nếu là ngày cuối, hệ thống sẽ tự xét lên vòng.");
-  $("reset-tournament").onclick = () => runAction("reset", "CẢNH BÁO: thao tác này xóa vĩnh viễn toàn bộ thí sinh, token, bài bot, snapshot và kết quả của cuộc thi trên Render. Sau đó cuộc thi trở về giai đoạn đầu vào và mở nhận bài. Bạn có chắc chắn muốn tiếp tục?");
+  $("reset-tournament").onclick = () => runAction("reset", "CẢNH BÁO: thao tác này xóa vĩnh viễn toàn bộ thí sinh, token, bài bot, snapshot và kết quả giải bot trên Render. Điểm chấm trực tiếp được giữ nguyên. Sau đó giải bot trở về giai đoạn đầu vào và mở nhận bài. Bạn có chắc chắn muốn tiếp tục?");
   $("logout").onclick = async () => { try { await api("/admin/logout", {method:"POST"}); location.href="/admin"; } catch(e) { message(e.message, "error"); } };
   refresh();
-  setInterval(refresh, 3000);
+  setInterval(refresh, 10000);
 </script>
 </body>
 </html>
