@@ -1,0 +1,217 @@
+/* Dark mode uses the existing palette in styles.css. */
+.theme-toggle {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 100;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid #655277;
+  border-radius: 24px;
+  background: #252031;
+  color: #e3d4ff;
+  box-shadow: 0 4px 18px #0003;
+  font-size: 12px;
+  font-weight: 600;
+}
+.theme-toggle:hover { background: #3b2e4c; }
+
+/* <html data-theme="light"> selects this palette for the React app. */
+:root[data-theme="light"] {
+  color-scheme: light;
+  color: #252334;
+  background: #f5f4fa;
+  --muted: #666078;
+  --line: #dfdbe8;
+  --violet: #6b42c4;
+}
+
+[data-theme="light"] .theme-toggle {
+  color: #55318f;
+  background: #fff;
+  border-color: #c9b9e0;
+  box-shadow: 0 4px 18px #39215b18;
+}
+[data-theme="light"] .theme-toggle:hover { background: #eee7f9; }
+
+/* Login / registration */
+[data-theme="light"] .auth-story {
+  background: radial-gradient(ellipse at 35% 46%, #d6c7ee65, transparent 62%), #eee9f7;
+  border-color: var(--line);
+}
+[data-theme="light"] .auth-panel {
+  background: radial-gradient(ellipse at 100% 100%, #eee7f960, transparent 60%), #fff;
+}
+[data-theme="light"] .brand-light,
+[data-theme="light"] .story-body h1 span { color: #7045aa; }
+[data-theme="light"] .brand small,
+[data-theme="light"] .auth-top a,
+[data-theme="light"] .story-features,
+[data-theme="light"] .auth-story footer,
+[data-theme="light"] .auth-bottom,
+[data-theme="light"] .secure-note { color: #6e617d; }
+[data-theme="light"] .eyebrow { color: #74539a; }
+[data-theme="light"] .pill {
+  color: #64408a;
+  background: #e4d8f570;
+  border-color: #bd9fd94f;
+}
+[data-theme="light"] .auth-tabs {
+  background: #f1eef6;
+  border-color: var(--line);
+}
+[data-theme="light"] .auth-tabs button { color: #746980; }
+[data-theme="light"] .auth-tabs button.selected {
+  color: #4c286f;
+  background: #fff;
+  box-shadow: 0 2px 6px #51316b12;
+}
+[data-theme="light"] label { color: #4c405b; }
+[data-theme="light"] label small,
+[data-theme="light"] .input-wrap input::placeholder { color: #81758e; }
+[data-theme="light"] .input-wrap {
+  color: #7c6890;
+  background: #faf9fc;
+  border-color: #d7cde1;
+}
+[data-theme="light"] .input-wrap input { color: #2c2236; }
+[data-theme="light"] .icon-button { color: #78648b; }
+[data-theme="light"] .password-meter i { background: #e3daeb; }
+[data-theme="light"] .password-meter .filled { background: #9464bd; }
+[data-theme="light"] .demo-account {
+  color: #655176;
+  background: #f3edf9;
+  border-color: #d2bce8;
+}
+[data-theme="light"] .demo-account strong,
+[data-theme="light"] .demo-account code { color: #58357b; }
+
+/* Decorative board in the login panel */
+[data-theme="light"] .game-art {
+  background: linear-gradient(130deg, #fff, #e7e0f0);
+  border-color: #c8b6da;
+  box-shadow: 0 20px 45px #5c367220;
+}
+[data-theme="light"] .art-top { color: #72607f; }
+[data-theme="light"] .mini-board { border-color: #cfbfdc; }
+[data-theme="light"] .mini-board > div { background: #e9e0f1; }
+[data-theme="light"] .mini-board .shade { background: #d7cae5; }
+[data-theme="light"] .floating-tag {
+  background: #ffffffed;
+  border-color: #c4a5df;
+  color: #8c5abb;
+  box-shadow: 0 8px 24px #4b2c621c;
+}
+[data-theme="light"] .floating-tag span { color: #7d688d; }
+[data-theme="light"] .floating-tag strong { color: #463052; }
+
+/* Dashboard */
+[data-theme="light"] .sidebar,
+[data-theme="light"] .panel,
+[data-theme="light"] .stat-card { background: #fff; }
+[data-theme="light"] .sidebar nav button { color: #766780; }
+[data-theme="light"] .sidebar nav button.active {
+  color: #684093;
+  background: #ede3f8;
+}
+[data-theme="light"] .sidebar nav button:hover { background: #f0eaf6; }
+[data-theme="light"] .nav-caption,
+[data-theme="light"] .admin-link,
+[data-theme="light"] .sidebar-user small,
+[data-theme="light"] .dashboard-header > span:first-child { color: #7a6d87; }
+[data-theme="light"] .sidebar-tip {
+  background: linear-gradient(150deg, #f0e7f7, #faf7fd);
+  border-color: #ddcde8;
+}
+[data-theme="light"] .sidebar-tip a,
+[data-theme="light"] .live-link,
+[data-theme="light"] .download-link { color: #72508e; }
+[data-theme="light"] .avatar {
+  background: #eee2f5;
+  border-color: #d7bee7;
+  color: #785090;
+}
+[data-theme="light"] .sidebar-user button { color: #7f648f; }
+[data-theme="light"] .badge {
+  color: #735186;
+  background: #eee4f777;
+  border-color: #d9c8e6;
+}
+[data-theme="light"] .secondary {
+  color: #65447c;
+  background: #f5eff9;
+  border-color: #d6c6e1;
+}
+[data-theme="light"] .secondary:hover { background: #eaddf4; }
+[data-theme="light"] .welcome-banner {
+  background: radial-gradient(ellipse at 70% 60%, #c9acdf44, transparent 70%), linear-gradient(110deg, #eae0f3, #f5effa);
+  border-color: #d3bfdf;
+}
+[data-theme="light"] .welcome-banner p { color: #72617e; }
+[data-theme="light"] .welcome-banner button { color: #744496; }
+[data-theme="light"] .stat-card small,
+[data-theme="light"] .muted { color: #7c668d; }
+[data-theme="light"] .stat-icon { color: #8555aa; background: #eee4f8; }
+[data-theme="light"] .color-1 { color: #4b6f9d; background: #e5edf9; }
+[data-theme="light"] .color-2 { color: #996b28; background: #fbf0dd; }
+[data-theme="light"] .color-3 { color: #397b5d; background: #e4f2eb; }
+[data-theme="light"] .drop-zone {
+  background: #faf6fd;
+  border-color: #bd9dd0;
+}
+[data-theme="light"] .drop-zone:hover { background: #f3ebf9; }
+[data-theme="light"] .upload-icon {
+  background: #eadcf4;
+  color: #8855a5;
+}
+[data-theme="light"] .drop-zone > span:last-of-type { color: #7e6b8c; }
+[data-theme="light"] .journey-step > span {
+  background: #f3eaf9;
+  border-color: #d4bee3;
+  color: #805596;
+}
+[data-theme="light"] .green { color: #2f8055; }
+[data-theme="light"] .dashboard-footer { color: #81718e; }
+[data-theme="light"] .form-error {
+  color: #ac2943;
+  background: #fff0f3;
+  border-color: #ecc0cb;
+}
+[data-theme="light"] .success {
+  color: #256945;
+  background: #edf8f1;
+  border-color: #b7dcc7;
+}
+[data-theme="light"] .champion-banner {
+  color: #876116;
+  background: #fff7e5;
+  border-color: #e7d19e;
+}
+
+/* Standings, rules and replay controls */
+[data-theme="light"] th { color: #7b648d; }
+[data-theme="light"] td { border-color: var(--line); }
+[data-theme="light"] .own-row { color: #694080; background: #f4eafa; }
+[data-theme="light"] .history > div { border-color: #d7c4e4; }
+[data-theme="light"] .history small,
+[data-theme="light"] .history span { color: #7d648e; }
+[data-theme="light"] .rule-pieces span {
+  background: #f1e7f8;
+  border-color: #d8c2e6;
+}
+[data-theme="light"] select {
+  background: #faf7fc;
+  border-color: #d7c4e2;
+  color: #543c66;
+}
+[data-theme="light"] .replay-names,
+[data-theme="light"] .replay-controls > span { color: #7b5d8d; }
+[data-theme="light"] .replay-board { border-color: #b99acc; }
+[data-theme="light"] .square { background: #e8ddf0; }
+[data-theme="light"] .square.dark { background: #cbb8dc; }
+[data-theme="light"] .square.goal { box-shadow: inset 0 0 0 2px #9e7c27; }
+[data-theme="light"] .square.last { box-shadow: inset 0 0 0 3px #99721b; }
+
+@media (max-width: 620px) {
+  .theme-toggle { right: 12px; bottom: 12px; padding: 10px 13px; }
+}

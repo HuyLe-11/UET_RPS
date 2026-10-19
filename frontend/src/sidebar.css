@@ -1,0 +1,53 @@
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.sidebar-header .brand { margin: 0; min-width: 0; font-size: 16px; gap: 8px; }
+.sidebar .sidebar-toggle {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  padding: 0;
+  border-radius: 7px;
+}
+
+/* A narrow icon rail is only used on desktop/tablet. */
+@media (min-width: 621px) {
+  .sidebar { transition: width .2s ease, padding .2s ease; }
+  .sidebar .admin-link { display: flex; align-items: center; gap: 8px; }
+
+  .sidebar.is-collapsed { width: 76px; padding: 26px 12px 18px; }
+  .sidebar.is-collapsed .sidebar-header { flex-direction: column; gap: 16px; }
+  .sidebar.is-collapsed .brand { margin: 0; gap: 0; }
+  .sidebar.is-collapsed .brand-icon { width: 36px; height: 38px; }
+  .sidebar.is-collapsed .brand > span:last-child,
+  .sidebar.is-collapsed .nav-caption,
+  .sidebar.is-collapsed .sidebar-label,
+  .sidebar.is-collapsed .nav-chevron,
+  .sidebar.is-collapsed .sidebar-tip,
+  .sidebar.is-collapsed .sidebar-user-details { display: none; }
+
+  .sidebar.is-collapsed nav { margin-top: 30px; gap: 8px; }
+  .sidebar.is-collapsed nav button { justify-content: center; min-height: 44px; padding: 12px; gap: 0; }
+  .sidebar.is-collapsed .live-link { justify-content: center; min-height: 40px; margin: auto 0 8px; }
+  .sidebar.is-collapsed .admin-link { justify-content: center; min-height: 40px; margin: 0 0 14px; }
+  .sidebar.is-collapsed .sidebar-user { flex-direction: column; gap: 10px; }
+  .sidebar.is-collapsed .sidebar-user button { margin: 0; min-width: 36px; min-height: 36px; }
+}
+
+@media (min-width: 621px) and (max-width: 850px) {
+  .sidebar-header .brand { font-size: 13px; gap: 5px; }
+  .sidebar-header .brand-icon { width: 28px; height: 32px; }
+}
+
+/* Retain the existing horizontal mobile menu. */
+@media (max-width: 620px) {
+  .sidebar .sidebar-toggle { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar { transition: none; }
+}

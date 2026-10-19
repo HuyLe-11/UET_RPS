@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="vi">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bảng Điều Khiển Ban Tổ Chức — OTTv2</title>
+  <style>
+    :root {
+      --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --surface-subtle: #f1f5f9;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --primary: #4f46e5;
+      --primary-hover: #4338ca;
+      --primary-light: #eef2ff;
+      --border: #e2e8f0;
+      --success: #16a34a;
+      --success-light: #f0fdf4;
+      --danger: #dc2626;
+      --danger-light: #fef2f2;
+      --warning: #d97706;
+      --warning-light: #fffbeb;
+      --radius: 12px;
+      --shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: var(--font-family);
+      color: var(--text);
+      background: var(--bg);
+      margin: 0;
+      padding: 24px 20px 60px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+
+    .brand-tag {
+      font-size: 0.75rem;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      color: var(--primary);
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.6rem, 3.5vw, 2.2rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .nav-link {
+      color: var(--text);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 600;
+      padding: 8px 14px;
+      border-radius: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+
+    .nav-link:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 0;
+      background: var(--primary);
+      color: #fff;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      gap: 6px;
+      transition: all 0.15s;
+    }
+
+    .btn:hover {
+      background: var(--primary-hover);
+    }
+
+    .btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .btn.secondary {
+      background: #e2e8f0;
+      color: #334155;
+    }
+
+    .btn.secondary:hover {
+      background: #cbd5e1;
+    }
+
+    .btn.danger {
+      background: var(--danger);
+      color: #fff;
+    }
+
+    .btn.danger:hover {
+      background: #b91c1c;
+    }
+
+    .btn.warning {
+      background: var(--warning);
+      color: #fff;
+    }
+
+    .btn.warning:hover {
+      background: #b45309;
+    }
+
+    .btn.success {
+      background: var(--success);
+      color: #fff;
+    }
+
+    .btn.success:hover {
+      background: #15803d;
+    }
+
+    .btn.sm {
+      padding: 6px 12px;
+      font-size: 0.82rem;
+    }
+
+    .notice {
+      padding: 14px 18px;
+      border-radius: var(--radius);
+      margin-bottom: 20px;
+      font-size: 0.92rem;
+      font-weight: 500;
+    }
+
+    .notice.info {
+      background: var(--primary-light);
+      color: var(--primary);
+      border: 1px solid #c7d2fe;
+    }
+
+    .notice.error {
+      background: var(--danger-light);
+      color: var(--danger);
+      border: 1px solid #fecaca;
+    }
+
+    .notice.warning {
+      background: var(--warning-light);
+      color: var(--warning);
+      border: 1px solid #fde68a;
+    }
+
+    .notice.success {
+      background: var(--success-light);
+      color: var(--success);
+      border: 1px solid #bbf7d0;
+    }
+
+    .grid-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 14px;
+      margin-bottom: 22px;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      box-shadow: var(--shadow);
+    }
+
+    .stat-card small {
+      display: block;
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    .stat-card strong {
+      font-size: 1.3rem;
+      font-weight: 800;
+      color: var(--text);
+      overflow-wrap: anywhere;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px;
+      box-shadow: var(--shadow);
+      margin-bottom: 20px;
+    }
+
+    .card-title {
+      margin: 0 0 12px;
+      font-size: 1.15rem;
+      font-weight: 700;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .actions-grid {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      margin-top: 12px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    th,
+    td {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    th {
+      color: var(--text-muted);
+      font-weight: 600;
+      background: var(--surface-subtle);
+    }
+
+    tr:hover {
+      background: #f8fafc;
+    }
+
+    .tag {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .tag.active {
+      background: #dcfce7;
+      color: #15803d;
+    }
+
+    .tag.out {
+      background: #fee2e2;
+      color: #b91c1c;
+    }
+
+    .tag.new {
+      background: #e0f2fe;
+      color: #0369a1;
+    }
+
+    .tag.yes {
+      background: #f0fdf4;
+      color: #16a34a;
+      font-weight: bold;
+    }
+
+    .tag.no {
+      background: #f1f5f9;
+      color: #64748b;
+    }
+
+    .filter-bar {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .filter-bar input,
+    .filter-bar select {
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font: inherit;
+      font-size: 0.88rem;
+    }
+
+    .filter-bar input {
+      min-width: 200px;
+      flex: 1;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top-color: #fff;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <div class="brand-tag">OTTv2 · HỆ THỐNG ĐIỀU HÀNH</div>
+        <h1>Ban Tổ Chức Giải Đấu</h1>
+      </div>
+      <div class="nav-links">
+        <a class="nav-link" href="/" target="_blank">🌐 Trang Thí Sinh</a>
+        <a class="nav-link" href="/live" target="_blank">🔴 Bảng Trực Tiếp</a>
+        <button class="btn secondary sm" id="logout-btn" type="button">Đăng xuất</button>
+      </div>
+    </header>
+
+    <div id="notice" class="notice info" role="status">Đang tải dữ liệu cuộc thi...</div>
+
+    <!-- THẺ TỔNG QUAN GIẢI ĐẤU -->
+    <section class="grid-stats" id="overview-stats"></section>
+
+    <!-- KHỐI ĐIỀU KHIỂN & CHẤM ĐIỂM -->
+    <section class="card">
+      <h2 class="card-title">
+        <span>🎮 Bảng Điều Khiển & Vận Hành Cuộc Thi</span>
+        <button class="btn secondary sm" id="refresh-btn" type="button">🔄 Làm mới trạng thái</button>
+      </h2>
+      <p style="color:var(--text-muted); font-size:0.9rem; margin-top:0;">
+        Thực hiện tuần tự theo quy trình: <strong>Chấm đầu vào</strong> ➔ <strong>Chốt bài mỗi đêm (00:00)</strong> ➔
+        <strong>Chấm ngày (01:00 - 05:00)</strong>.
+      </p>
+
+      <div class="actions-grid">
+        <button class="btn success" id="toggle-submissions">Đóng / Mở nhận bài</button>
+        <button class="btn" id="entry-close">Chấm đầu vào và chia bảng</button>
+        <button class="btn secondary" id="close-day">Chốt bài ngày thi</button>
+        <button class="btn" id="grade-day">Chấm ngày / xét lên vòng</button>
+        <button class="btn danger" id="reset-tournament">Reset toàn bộ cuộc thi</button>
+      </div>
+    </section>
+
+    <!-- DANH SÁCH THÍ SINH & LỌC -->
+    <section class="card">
+      <div class="card-title">
+        <span>👥 Danh Sách Thí Sinh (<span id="contestant-count">0</span>)</span>
+      </div>
+
+      <div class="filter-bar">
+        <input id="search-input" type="text" placeholder="🔍 Tìm kiếm thí sinh theo tên...">
+        <select id="status-filter">
+          <option value="all">Tất cả trạng thái</option>
+          <option value="active">Đang đấu (Active)</option>
+          <option value="out">Đã bị loại (Out)</option>
+          <option value="new">Mới đăng ký (New)</option>
+        </select>
+        <select id="bot-filter">
+          <option value="all">Tất cả bot</option>
+          <option value="has_bot">Đã có bot</option>
+          <option value="no_bot">Chưa nộp bot</option>
+        </select>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Tên Thí Sinh</th>
+              <th>Trạng Thái</th>
+              <th>Điểm Đầu Vào</th>
+              <th>Bảng Đấu</th>
+              <th>File Bot</th>
+              <th>Nộp Kỳ Này</th>
+            </tr>
+          </thead>
+          <tbody id="entrants-table">
+            <tr>
+              <td colspan="6" style="text-align:center; padding:18px;">Đang tải danh sách thí sinh...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const csrf = {{ csrf| tojson }};
+    const $ = id => document.getElementById(id);
+    const escapeHtml = str => String(str ?? "—").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+    let currentEntrants = [];
+
+    function showMessage(text, type = "info") {
+      const el = $("notice");
+      el.textContent = text;
+      el.className = `notice ${type}`;
+    }
+
+    async function api(path, options = {}) {
+      const headers = { ...(options.headers || {}) };
+      if (options.method === "POST") {
+        headers["X-CSRF-Token"] = csrf;
+      }
+      const res = await fetch(path, { ...options, headers });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 401) {
+        location.href = "/admin";
+        throw new Error("Phiên đăng nhập quản trị đã hết hạn.");
+      }
+      if (!res.ok) {
+        throw new Error(data.error || `Lỗi ${res.status}: Thao tác không thành công`);
+      }
+      return data;
+    }
+
+    async function refresh() {
+      try {
+        const [overview, job] = await Promise.all([
+          api("/admin/api/overview"),
+          api("/admin/api/job")
+        ]);
+
+        // Thống kê nhanh
+        const statItems = [
+          ["Giai đoạn", overview.phase === "entry" ? "Thi đầu vào" : (overview.phase === "round" ? "Thi vòng bảng" : "Kết thúc")],
+          ["Vòng hiện tại", overview.round !== null ? `Vòng ${overview.round}` : "—"],
+          ["Ngày mở", overview.day !== null ? `Ngày ${overview.day}` : "—"],
+          ["Ngày chờ chấm", overview.pending !== null ? `Ngày ${overview.pending}` : "Không có"],
+          ["Tổng thí sinh", overview.entrants ? overview.entrants.length : 0],
+          ["Cổng nhận bài", overview.accepting_submissions ? "🟢 Đang mở" : "🔴 Đang đóng"]
+        ];
+        if (overview.champion) {
+          statItems.push(["🏆 Quán quân", overview.champion]);
+        }
+
+        $("overview-stats").innerHTML = statItems.map(([label, val]) => `
+        <div class="stat-card">
+          <small>${escapeHtml(label)}</small>
+          <strong>${escapeHtml(val)}</strong>
+        </div>
+      `).join("");
+
+        // Cập nhật danh sách thí sinh
+        currentEntrants = overview.entrants || [];
+        $("contestant-count").textContent = currentEntrants.length;
+        renderEntrantsTable();
+
+        // Cập nhật trạng thái nút bấm
+        const isRunning = job.state === "running";
+        $("toggle-submissions").textContent = overview.accepting_submissions ? "🔒 Đóng nhận bài" : "🟢 Mở nhận bài";
+        $("toggle-submissions").className = overview.accepting_submissions ? "btn secondary" : "btn success";
+        $("toggle-submissions").dataset.open = String(overview.accepting_submissions);
+        $("toggle-submissions").disabled = overview.phase === "done" || isRunning;
+
+        $("entry-close").disabled = overview.phase !== "entry" || isRunning;
+        $("close-day").disabled = overview.phase !== "round" || !!overview.pending || isRunning;
+        $("grade-day").disabled = overview.phase !== "round" || !overview.pending || isRunning;
+        $("reset-tournament").disabled = isRunning;
+
+        if (isRunning) {
+          showMessage(`⏳ Đang chạy tác vụ: ${job.action}. Vui lòng chờ...`, "warning");
+        } else if (job.state === "failed") {
+          showMessage(`❌ Thao tác "${job.action}" thất bại: ${job.error}`, "error");
+        } else if (job.state === "complete") {
+          showMessage(`✅ Hoàn tất thao tác: ${job.action}.`, "success");
+        } else {
+          showMessage("Dữ liệu quản trị đã cập nhật mới nhất.", "info");
+        }
+      } catch (err) {
+        showMessage(err.message, "error");
+      }
+    }
+
+    function renderEntrantsTable() {
+      const q = $("search-input").value.trim().toLowerCase();
+      const stFilter = $("status-filter").value;
+      const botFilter = $("bot-filter").value;
+
+      const filtered = currentEntrants.filter(e => {
+        if (q && !e.name.toLowerCase().includes(q)) return false;
+        if (stFilter !== "all" && e.status !== stFilter) return false;
+        if (botFilter === "has_bot" && !e.has_bot) return false;
+        if (botFilter === "no_bot" && e.has_bot) return false;
+        return true;
+      });
+
+      if (!filtered.length) {
+        $("entrants-table").innerHTML = `<tr><td colspan="6" style="text-align:center; padding:18px; color:var(--text-muted);">Không tìm thấy thí sinh nào khớp với bộ lọc.</td></tr>`;
+        return;
+      }
+
+      $("entrants-table").innerHTML = filtered.map(e => {
+        const stTag = e.status === "active" ? "active" : (e.status === "out" ? "out" : "new");
+        return `
+        <tr>
+          <td><strong>${escapeHtml(e.name)}</strong></td>
+          <td><span class="tag ${stTag}">${escapeHtml(e.status)}</span></td>
+          <td>${escapeHtml(e.entry ?? "—")}</td>
+          <td>${e.group !== null && e.group !== undefined ? `Bảng ${e.group}` : "—"}</td>
+          <td><span class="tag ${e.has_bot ? 'yes' : 'no'}">${e.has_bot ? 'Đã có' : 'Chưa'}</span></td>
+          <td><span class="tag ${e.submitted ? 'yes' : 'no'}">${e.submitted ? 'Đã nộp' : 'Chưa'}</span></td>
+        </tr>
+      `;
+      }).join("");
+    }
+
+    $("search-input").oninput = renderEntrantsTable;
+    $("status-filter").onchange = renderEntrantsTable;
+    $("bot-filter").onchange = renderEntrantsTable;
+
+    async function executeAction(action, confirmMsg) {
+      if (!confirm(confirmMsg)) return;
+      try {
+        await api(`/admin/api/actions/${action}`, { method: "POST" });
+        showMessage("Đã phát lệnh thực thi tác vụ. Đang xử lý...", "warning");
+        await refresh();
+      } catch (err) {
+        showMessage(err.message, "error");
+      }
+    }
+
+    $("toggle-submissions").onclick = async () => {
+      const opening = $("toggle-submissions").dataset.open !== "true";
+      try {
+        await api("/admin/api/submissions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ accepting: opening })
+        });
+        await refresh();
+      } catch (err) {
+        showMessage(err.message, "error");
+      }
+    };
+
+    $("entry-close").onclick = () => executeAction(
+      "entry-close",
+      "Bắt đầu Chấm Đầu Vào & Chia Bảng?\n\nHệ thống sẽ khóa nộp bài tạm thời, chạy bot thí sinh đấu với 3 bot BTC, loại thí sinh không đạt điểm và chia đều vào các bảng đấu."
+    );
+
+    $("close-day").onclick = () => executeAction(
+      "close-day",
+      "Chốt bài nộp của ngày hiện tại (Hạn 00:00)?\n\nSnapshot code bot hiện tại sẽ được lưu lại để phục vụ cho đợt chấm tiếp theo."
+    );
+
+    $("grade-day").onclick = () => executeAction(
+      "grade-day",
+      "Bắt đầu Chấm Điểm Ngày Thi?\n\nHệ thống sẽ ghép cặp 7 trận BO2 cho từng bảng và cập nhật bảng xếp hạng. Nếu là ngày cuối tuần, hệ thống sẽ tự động xét tuyển người đi tiếp (Top & Vé vớt)."
+    );
+
+    $("reset-tournament").onclick = () => executeAction(
+      "reset",
+      "⚠️ CẢNH BÁO NGUY HIỂM ⚠️\n\nThao tác này sẽ XÓA TOÀN BỘ thí sinh, bài nộp, snapshot và kết quả giải đấu để đưa hệ thống về trạng thái ban đầu.\n\nBạn có chắc chắn 100% muốn reset?"
+    );
+
+    $("logout-btn").onclick = async () => {
+      try {
+        await api("/admin/logout", { method: "POST" });
+        location.href = "/login";
+      } catch (err) {
+        showMessage(err.message, "error");
+      }
+    };
+
+    $("refresh-btn").onclick = refresh;
+
+    refresh();
+    setInterval(refresh, 8000);
+  </script>
+</body>
+
+</html>
