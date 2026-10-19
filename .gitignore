@@ -4,4 +4,14 @@ data/.env
 data/storage/
 
 .env
-servers/
+servers/static/live-board.json
+static/live-board.json.tmp
+frontend/node_modules/
+frontend/dist/
+frontend/*.tsbuildinfo
+.session-key
+*.db-wal
+*.db-shm
+.test-tmp/
+__pycache__/
+*.pyc
