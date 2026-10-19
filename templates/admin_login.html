@@ -3,37 +3,130 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Đăng nhập ban tổ chức — OTTv2</title>
+  <title>Đăng nhập Ban Tổ Chức — OTTv2</title>
   <style>
-    :root { font-family: Inter, system-ui, "Segoe UI", sans-serif; color:#172033; background:#f4f6fb; }
-    * { box-sizing:border-box; }
-    body { max-width:520px; margin:12vh auto; padding:20px; }
-    main { background:#fff; border:1px solid #e3e8f1; border-radius:16px; padding:26px; box-shadow:0 8px 24px #1e293b08; }
-    h1 { margin:0 0 10px; font-size:1.5rem; }
-    p { color:#657188; line-height:1.55; }
-    label { display:block; font-weight:650; margin:18px 0 7px; }
-    input { width:100%; padding:12px; border:1px solid #d8deea; border-radius:9px; font:inherit; }
-    button { border:0; background:#4f46e5; color:white; padding:11px 15px; border-radius:9px; font:inherit; font-weight:700; cursor:pointer; margin-top:15px; }
-    .error { padding:12px; border-radius:9px; background:#fff0f0; color:#a12b2b; }
-    a { color:#4f46e5; }
+    :root {
+      --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --primary: #4f46e5;
+      --primary-hover: #4338ca;
+      --border: #e2e8f0;
+      --danger: #dc2626;
+      --danger-light: #fef2f2;
+      --radius: 14px;
+      --shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: var(--font-family);
+      color: var(--text);
+      background: var(--bg);
+      margin: 0;
+      display: flex;
+      min-height: 100vh;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    main {
+      width: 100%;
+      max-width: 440px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px 28px;
+      box-shadow: var(--shadow);
+    }
+    .brand-tag {
+      font-size: 0.75rem;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      color: var(--primary);
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 1.6rem;
+      font-weight: 800;
+    }
+    p { color: var(--text-muted); font-size: 0.92rem; line-height: 1.5; margin: 0 0 20px; }
+    label { display: block; font-weight: 600; font-size: 0.88rem; margin: 0 0 6px; color: #334155; }
+    input[type="password"] {
+      width: 100%;
+      padding: 11px 13px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font: inherit;
+      font-size: 0.95rem;
+      margin-bottom: 16px;
+    }
+    input:focus {
+      outline: 2px solid var(--primary);
+      border-color: var(--primary);
+    }
+    button {
+      width: 100%;
+      border: 0;
+      background: var(--primary);
+      color: #fff;
+      padding: 12px;
+      border-radius: 8px;
+      font: inherit;
+      font-weight: 700;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    button:hover { background: var(--primary-hover); }
+    .error {
+      padding: 12px 14px;
+      border-radius: 8px;
+      background: var(--danger-light);
+      color: var(--danger);
+      font-size: 0.9rem;
+      border: 1px solid #fecaca;
+      margin-bottom: 16px;
+    }
+    .footer-links {
+      margin-top: 22px;
+      text-align: center;
+      border-top: 1px solid var(--border);
+      padding-top: 16px;
+    }
+    .footer-links a {
+      color: var(--primary);
+      text-decoration: none;
+      font-size: 0.88rem;
+      font-weight: 600;
+    }
+    .footer-links a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
   <main>
-    <h1>Ban tổ chức</h1>
+    <div class="brand-tag">OTTv2 · HỆ THỐNG ĐIỀU HÀNH</div>
+    <h1>Ban Tổ Chức</h1>
     {% if not configured %}
-      <p class="error">Chưa cấu hình mật khẩu quản trị. Khi chạy local, hãy đặt biến <code>ADMIN_PASSWORD</code> trong PowerShell rồi khởi động lại server.</p>
+      <div class="error">
+        Chưa cấu hình mật khẩu quản trị. Hãy thiết lập biến môi trường <code>ADMIN_PASSWORD</code> trên máy chủ rồi khởi động lại ứng dụng.
+      </div>
     {% else %}
-      <p>Đăng nhập để quản lý cuộc thi. Dùng mật khẩu quản trị do chủ dự án cấu hình.</p>
-      {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+      <p>Đăng nhập vào bảng điều hành giải đấu bot OTTv2.</p>
+      {% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
       <form method="post" action="/admin">
         <input type="hidden" name="csrf_token" value="{{ csrf }}">
         <label for="password">Mật khẩu quản trị</label>
-        <input id="password" name="password" type="password" autocomplete="current-password" required autofocus>
-        <button type="submit">Đăng nhập</button>
+        <input id="password" name="password" type="password" placeholder="Nhập mật khẩu BTC" autocomplete="current-password" required autofocus>
+        <button type="submit">Đăng nhập Quản Trị</button>
       </form>
     {% endif %}
-    <p><a href="/">Quay lại trang thí sinh</a></p>
+    <div class="footer-links">
+      <a href="/">← Quay lại trang thi đấu dành cho thí sinh</a>
+    </div>
   </main>
 </body>
 </html>

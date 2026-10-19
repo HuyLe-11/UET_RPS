@@ -1,2 +1,7 @@
 static/live-board.json
 static/live-board.json.tmp
+data/.env
+data/storage/
+
+.env
+servers/

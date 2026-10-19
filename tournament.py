@@ -91,6 +91,18 @@ def init():
     c.close()
 
 
+def _publish(event):
+    """Đẩy kết quả lên Supabase (data/sync.py) khi OTT_SUPABASE_SYNC=1. Lỗi mạng không làm hỏng việc chấm."""
+    if os.environ.get("OTT_SUPABASE_SYNC") != "1":
+        return
+    try:
+        from data import sync
+        sync.run()
+        print(f"[sync] Đã đồng bộ Supabase sau {event}")
+    except Exception as exc:
+        print(f"[sync] Lỗi đồng bộ sau {event}: {exc!r} (chạy lại: python -m data.sync)")
+
+
 def reset_tournament():
     c = sqlite3.connect(DB, timeout=30)
     try:
@@ -156,27 +168,32 @@ def latest(name):
     return p if os.path.exists(p) else None
 
 
-def submit(name, src):
+def submit(name, src, allow_eval=False):
     ph = get("phase", "entry")
     if ph not in ("entry", "round"):
         raise ValueError("Cuộc thi không nhận bài lúc này")
     if get("accepting_submissions", "1") != "1":
         raise ValueError("Ban tổ chức đang tạm đóng nhận bài")
-    u = q("select status from users where name=?", (name,))[0]
+    rows = q("select status from users where name=?", (name,))
+    if not rows:
+        q("insert or ignore into users(name, token, status) values(?, ?, 'new')", (name, secrets.token_hex(16)))
+        rows = q("select status from users where name=?", (name,))
+    u = rows[0]
     if ph == "round" and u["status"] != "active":
         competed = q("select 1 from member where name=? limit 1", (name,))
         if competed:
             raise ValueError("Bạn đã bị loại khỏi cuộc thi ở vòng trước.")
-        raise ValueError(
-            "Bạn chưa đủ điều kiện qua vòng đầu vào (chưa nộp bot hoặc không đạt điểm yêu cầu), "
-            "nên không thể tiếp tục cuộc thi."
-        )
+        if not allow_eval:
+            raise ValueError(
+                "Bạn chưa đủ điều kiện qua vòng đầu vào (chưa nộp bot hoặc không đạt điểm yêu cầu), "
+                "nên không thể tiếp tục cuộc thi."
+            )
     if len(src) > 65536:
         raise ValueError("File quá lớn (>64KB)")
     compile(src, "bot", "exec")                      # kiểm tra cú pháp, KHÔNG chạy
     last = q("select max(ts) t from subs where name=?", (name,))[0]["t"]
-    if last and time.time() - last < 10:
-        raise ValueError("Nộp quá nhanh, chờ 10 giây")
+    if last and time.time() - last < 3:
+        raise ValueError("Nộp quá nhanh, vui lòng chờ vài giây")
     d = os.path.join(BOT_DIR, name); os.makedirs(d, exist_ok=True)
     with open(os.path.join(d, "latest.py"), "wb") as f:
         f.write(src)
@@ -820,10 +837,10 @@ def main():
     ap.add_argument("args", nargs="*")
     a = ap.parse_args()
     init()
-    if a.cmd == "entry-close": entry_close()
-    elif a.cmd == "close": close_day()
-    elif a.cmd == "grade": grade_day()
-    elif a.cmd == "run-day": close_day(); grade_day()
+    if a.cmd == "entry-close": entry_close(); _publish("entry-close")
+    elif a.cmd == "close": close_day(); _publish("close")
+    elif a.cmd == "grade": grade_day(); _publish("grade")
+    elif a.cmd == "run-day": close_day(); grade_day(); _publish("run-day")
     elif a.cmd == "status":
         print({k: get(k) for k in ("phase", "round", "day", "pending")})
         print("users:", {r["status"]: r["c"] for r in q("select status,count(*) c from users group by status")})

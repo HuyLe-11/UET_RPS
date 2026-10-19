@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Từ chối truy cập (403) — OTTv2</title>
+  <style>
+    :root {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #0f172a;
+      background: #f8fafc;
+    }
+    body {
+      display: flex;
+      min-height: 100vh;
+      align-items: center;
+      justify-content: center;
+      margin: 0;
+      padding: 20px;
+    }
+    .card {
+      max-width: 480px;
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 14px;
+      padding: 32px 28px;
+      text-align: center;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.06);
+    }
+    h1 { font-size: 1.6rem; margin: 0 0 12px; color: #dc2626; }
+    p { color: #64748b; line-height: 1.6; margin: 0 0 20px; }
+    .btn {
+      display: inline-block;
+      background: #4f46e5;
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>🚫 403 — Không có quyền truy cập</h1>
+    <p>Tài khoản <strong>{{ user.username }}</strong> có vai trò <em>{{ user.role }}</em>, không có quyền quản trị ban tổ chức.<br>Trang này chỉ dành cho người dùng có quyền <code>admin</code> trên Supabase.</p>
+    <a class="btn" href="/">Về trang thi đấu</a>
+  </div>
+</body>
+</html>

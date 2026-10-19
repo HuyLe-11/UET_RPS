@@ -1,288 +1,1282 @@
 <!doctype html>
 <html lang="vi">
+
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>OTTv2 — Thi đấu bot</title>
+  <title>Đấu Trường Bot OTTv2 — Thí Sinh</title>
   <style>
-    :root { font-family: Inter, system-ui, "Segoe UI", sans-serif; color: #172033; background: #f4f6fb; }
-    * { box-sizing: border-box; }
-    body { max-width: 1050px; margin: 0 auto; padding: 34px 20px 60px; }
-    header { display:flex; justify-content:space-between; align-items:center; gap:20px; margin-bottom:24px; }
-    h1 { margin:0; font-size: clamp(1.7rem, 4vw, 2.5rem); letter-spacing:-.04em; }
-    h2 { margin:0 0 15px; font-size:1.1rem; }
-    p { color:#657188; line-height:1.55; }
-    .brand { color:#4f46e5; font-weight:800; letter-spacing:.12em; font-size:.78rem; }
-    .grid { display:grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap:16px; }
-    .card { background:white; border:1px solid #e3e8f1; border-radius:16px; padding:22px; box-shadow:0 8px 24px #1e293b08; }
-    .wide { grid-column:1/-1; }
-    label { display:block; font-size:.9rem; font-weight:650; margin:12px 0 7px; }
-    input { width:100%; padding:11px 12px; border:1px solid #d8deea; border-radius:9px; font:inherit; background:#fff; }
-    input:focus { outline:3px solid #4f46e522; border-color:#6962ed; }
-    button { border:0; background:#4f46e5; color:white; padding:11px 15px; border-radius:9px; font:inherit; font-weight:700; cursor:pointer; margin-top:13px; }
-    button:hover { background:#3f38c9; } button.secondary { color:#334155; background:#eef1f7; }
-    .rules-btn { margin-top:0; }
-    .modal-backdrop { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(15,23,42,.5); padding:20px; z-index:1000; }
-    .modal-backdrop.show { display:flex; }
-    .modal { width:min(760px, 100%); max-height:85vh; overflow:auto; background:#fff; border-radius:18px; box-shadow:0 30px 80px rgba(15,23,42,.35); border:1px solid #e2e8f0; }
-    .modal-header { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:20px 22px 14px; border-bottom:1px solid #edf1f6; }
-    .modal-header h2 { margin:0; }
-    .modal-body { padding:18px 22px 22px; color:#334155; line-height:1.7; }
-    .modal-body ul { margin:10px 0 0 18px; padding:0; }
-    .modal-body li { margin-bottom:8px; }
-    .close-btn { margin-top:0; background:#eef1f7; color:#334155; }
-    .row { display:flex; gap:9px; align-items:center; flex-wrap:wrap; }
-    .row input { flex:1; min-width:180px; }
-    .hint { font-size:.87rem; }
-    #notice { display:none; padding:12px 15px; border-radius:10px; margin:0 0 16px; background:#eef2ff; color:#3730a3; }
-    #notice.error { display:block; background:#fff0f0; color:#a12b2b; }
-    #notice.ok { display:block; background:#eaf8ef; color:#17683a; }
-    #champion-announcement { display:none; padding:16px 18px; border:1px solid #f2c94c; border-radius:12px; margin:0 0 18px; background:#fff8dc; color:#704f00; font-size:1.15rem; font-weight:750; text-align:center; }
-    .hidden { display:none; }
-    .status { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; }
-    .stat { padding:12px; background:#f6f7fb; border-radius:10px; }
-    .stat small { display:block; color:#69758a; margin-bottom:5px; }
-    .stat strong { overflow-wrap:anywhere; }
-    .table-wrap { overflow-x:auto; }
-    table { width:100%; border-collapse:collapse; min-width:480px; }
-    th,td { text-align:left; padding:11px 9px; border-bottom:1px solid #edf0f5; }
-    th { color:#647087; font-size:.86rem; }
-    .empty { padding:15px; color:#69758a; background:#f6f7fb; border-radius:9px; }
-    .replay-board { width:min(100%,520px); margin:16px auto; }
-    .replay-board svg { display:block; width:100%; height:auto; }
-    .replay-controls { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-    .replay-controls button { margin-top:0; }
-    .replay-controls input[type="range"] { flex:1; min-width:150px; }
-    @media(max-width:700px) { .grid { grid-template-columns:1fr; } .wide { grid-column:auto; } header { align-items:flex-start; flex-direction:column; } }
+    :root {
+      --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --bg: #f3f5f9;
+      --surface: #ffffff;
+      --surface-subtle: #f8fafc;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --primary: #4f46e5;
+      --primary-hover: #4338ca;
+      --primary-light: #eef2ff;
+      --border: #e2e8f0;
+      --success: #16a34a;
+      --success-light: #f0fdf4;
+      --danger: #dc2626;
+      --danger-light: #fef2f2;
+      --warning: #d97706;
+      --warning-light: #fffbeb;
+      --radius: 12px;
+      --shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: var(--font-family);
+      color: var(--text);
+      background: var(--bg);
+      margin: 0;
+      padding: 20px 16px 60px;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+
+    .brand-tag {
+      font-size: 0.75rem;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      color: var(--primary);
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.6rem, 3.5vw, 2.2rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    .subtitle {
+      margin: 4px 0 0;
+      color: var(--text-muted);
+      font-size: 0.95rem;
+    }
+
+    .user-panel {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 8px 14px;
+      border-radius: 10px;
+      box-shadow: var(--shadow);
+    }
+
+    .user-avatar {
+      width: 36px;
+      height: 36px;
+      background: var(--primary-light);
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      font-weight: 700;
+    }
+
+    .user-meta {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .user-meta strong {
+      font-size: 0.92rem;
+    }
+
+    .user-meta small {
+      color: var(--text-muted);
+      font-size: 0.78rem;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 0;
+      background: var(--primary);
+      color: #fff;
+      padding: 9px 15px;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      gap: 6px;
+      transition: all 0.15s;
+    }
+
+    .btn:hover {
+      background: var(--primary-hover);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn.secondary {
+      background: #e2e8f0;
+      color: #334155;
+    }
+
+    .btn.secondary:hover {
+      background: #cbd5e1;
+    }
+
+    .btn.success {
+      background: var(--success);
+      color: #fff;
+    }
+
+    .btn.success:hover {
+      background: #15803d;
+    }
+
+    .btn.sm {
+      padding: 6px 12px;
+      font-size: 0.82rem;
+    }
+
+    .btn.danger {
+      background: var(--danger);
+      color: #fff;
+    }
+
+    .btn.danger:hover {
+      background: #b91c1c;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .nav-link {
+      color: var(--text);
+      text-decoration: none;
+      font-size: 0.88rem;
+      font-weight: 600;
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+
+    .nav-link:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    #notice {
+      display: none;
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      margin-bottom: 20px;
+      font-size: 0.92rem;
+      font-weight: 500;
+    }
+
+    #notice.ok {
+      display: block;
+      background: var(--success-light);
+      color: var(--success);
+      border: 1px solid #bbf7d0;
+    }
+
+    #notice.error {
+      display: block;
+      background: var(--danger-light);
+      color: var(--danger);
+      border: 1px solid #fecaca;
+    }
+
+    #notice.info {
+      display: block;
+      background: var(--primary-light);
+      color: var(--primary);
+      border: 1px solid #c7d2fe;
+    }
+
+    #champion-banner {
+      display: none;
+      padding: 14px 20px;
+      border-radius: var(--radius);
+      background: linear-gradient(135deg, #fef3c7, #fde68a);
+      color: #92400e;
+      border: 1px solid #f59e0b;
+      margin-bottom: 20px;
+      font-size: 1.1rem;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px;
+      box-shadow: var(--shadow);
+    }
+
+    .wide {
+      grid-column: 1 / -1;
+    }
+
+    .card-title {
+      margin: 0 0 10px;
+      font-size: 1.15rem;
+      font-weight: 700;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .hint {
+      color: var(--text-muted);
+      font-size: 0.86rem;
+      margin: 0 0 14px;
+      line-height: 1.5;
+    }
+
+    label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin: 10px 0 5px;
+      color: #334155;
+    }
+
+    input[type="file"],
+    select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font: inherit;
+      font-size: 0.9rem;
+      background: #fff;
+    }
+
+    input:focus,
+    select:focus {
+      outline: 2px solid var(--primary);
+      border-color: var(--primary);
+    }
+
+    .row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(115px, 1fr));
+      gap: 10px;
+    }
+
+    .stat-box {
+      background: var(--surface-subtle);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+
+    .stat-box small {
+      display: block;
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      margin-bottom: 4px;
+    }
+
+    .stat-box strong {
+      font-size: 1.05rem;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .tag.active {
+      background: #dcfce7;
+      color: #15803d;
+    }
+
+    .tag.out {
+      background: #fee2e2;
+      color: #b91c1c;
+    }
+
+    .tag.new {
+      background: #e0f2fe;
+      color: #0369a1;
+    }
+
+    .tag.pass {
+      background: #dcfce7;
+      color: #15803d;
+      font-weight: 700;
+    }
+
+    .tag.warn {
+      background: #fef3c7;
+      color: #92400e;
+      font-weight: 700;
+    }
+
+    .empty-state {
+      padding: 20px;
+      text-align: center;
+      color: var(--text-muted);
+      background: var(--surface-subtle);
+      border-radius: 8px;
+      font-size: 0.9rem;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      margin-top: 10px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+    }
+
+    th,
+    td {
+      text-align: left;
+      padding: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    th {
+      color: var(--text-muted);
+      font-weight: 600;
+      background: var(--surface-subtle);
+    }
+
+    tr.highlight {
+      background: #fdf4ff;
+      font-weight: 700;
+    }
+
+    /* Thanh trạng thái tính điểm (Judging Pipeline) */
+    .progress-card {
+      background: #0f172a;
+      color: #fff;
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      margin-top: 14px;
+      display: none;
+    }
+
+    .progress-bar-wrap {
+      width: 100%;
+      height: 8px;
+      background: #334155;
+      border-radius: 999px;
+      overflow: hidden;
+      margin: 10px 0;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #6366f1, #22c55e);
+      border-radius: 999px;
+      transition: width 0.35s ease;
+    }
+
+    .progress-steps {
+      font-size: 0.84rem;
+      color: #94a3b8;
+      display: flex;
+      justify-content: space-between;
+      margin-top: 6px;
+    }
+
+    /* Màn hình kết quả & tiêu chí chấm */
+    .scorecard {
+      display: none;
+      border: 1px solid #cbd5e1;
+      border-radius: var(--radius);
+      background: #f8fafc;
+      padding: 18px;
+      margin-top: 16px;
+    }
+
+    .scorecard-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid #e2e8f0;
+      margin-bottom: 14px;
+    }
+
+    .scorecard-title {
+      font-size: 1.1rem;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .criteria-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 12px;
+      margin: 14px 0;
+    }
+
+    .criteria-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 12px 14px;
+    }
+
+    .criteria-card .crit-name {
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: #64748b;
+    }
+
+    .criteria-card .crit-score {
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: #0f172a;
+      margin: 4px 0;
+    }
+
+    .criteria-card .crit-desc {
+      font-size: 0.78rem;
+      color: #64748b;
+      line-height: 1.4;
+    }
+
+    /* Code Viewer của Bot mẫu */
+    .code-viewer-wrap {
+      border: 1px solid #334155;
+      border-radius: 10px;
+      background: #0f172a;
+      overflow: hidden;
+      margin-top: 10px;
+    }
+
+    .code-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #1e293b;
+      padding: 8px 14px;
+      border-bottom: 1px solid #334155;
+    }
+
+    .code-title {
+      color: #cbd5e1;
+      font-family: monospace;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    pre.code-content {
+      margin: 0;
+      padding: 14px 16px;
+      color: #e2e8f0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 0.82rem;
+      line-height: 1.55;
+      max-height: 360px;
+      overflow-y: auto;
+      white-space: pre;
+    }
+
+    .replay-board {
+      width: min(100%, 500px);
+      margin: 16px auto;
+    }
+
+    .replay-board svg {
+      display: block;
+      width: 100%;
+      height: auto;
+      border-radius: 8px;
+    }
+
+    .replay-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+
+    .replay-controls input[type="range"] {
+      flex: 1;
+      min-width: 150px;
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(15, 23, 42, 0.55);
+      backdrop-filter: blur(2px);
+      padding: 20px;
+      z-index: 1000;
+    }
+
+    .modal-backdrop.show {
+      display: flex;
+    }
+
+    .modal {
+      width: min(720px, 100%);
+      max-height: 85vh;
+      overflow-y: auto;
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+    }
+
+    .modal-header {
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .modal-body {
+      padding: 20px 24px;
+      line-height: 1.6;
+      font-size: 0.95rem;
+      color: #334155;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    @media(max-width: 768px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .user-panel {
+        width: 100%;
+        justify-content: space-between;
+      }
+    }
   </style>
 </head>
+
 <body>
-  <header>
-    <div>
-      <div class="brand">OTTv2 · BOT TOURNAMENT</div>
-      <h1>Thi đấu bot</h1>
-      <p>Đăng ký, nộp bot Python và theo dõi kết quả thi đấu.</p>
-    </div>
-    <div class="row">
-      <button class="secondary rules-btn" id="rules-open" type="button">Xem thể lệ</button>
-      <a href="/live">Tiến độ chấm</a>
-      <a href="/admin">Ban tổ chức</a>
-    </div>
-  </header>
-  <div id="champion-announcement" role="status" aria-live="polite"></div>
+  <div class="container">
+    <header>
+      <div>
+        <div class="brand-tag">OTTv2 · NỀN TẢNG THI ĐẤU BOT</div>
+        <h1>Đấu Trường Oẳn Tù Tì</h1>
+        <p class="subtitle">Nộp bot, đấu đối kháng trực tiếp với Bot mẫu và theo dõi kết quả</p>
+      </div>
+
+      <!-- Khối tài khoản đã đăng nhập -->
+      <div class="user-panel">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div class="user-avatar">{{ user.username[0]|upper }}</div>
+          <div class="user-meta">
+            <strong>{{ user.username }}</strong>
+            <small>Thí sinh đã xác thực</small>
+          </div>
+        </div>
+        <div class="nav-links">
+          <a class="nav-link" href="/live" target="_blank">🔴 Bảng Live</a>
+          <button class="btn secondary sm" id="rules-open" type="button">📜 Thể lệ</button>
+          <button class="btn danger sm" id="logout-btn" type="button">Đăng xuất</button>
+        </div>
+      </div>
+    </header>
+
+    <div id="champion-banner" role="status"></div>
+    <div id="notice" role="status"></div>
+
+    <main class="grid">
+      <!-- KHỐI 1: TRẠNG THÁI CỦA THÍ SINH -->
+      <section class="card">
+        <div class="card-title">
+          <span>📊 Trạng thái thi đấu của bạn</span>
+          <button class="btn secondary sm" id="refresh-status-btn" type="button">🔄 Cập nhật</button>
+        </div>
+        <div id="status-container" class="empty-state">Đang tải dữ liệu thi đấu...</div>
+      </section>
+
+      <!-- KHỐI 2: NỘP BÀI THI & CHẤM ĐẤU VỚI BOT MẪU -->
+      <section class="card">
+        <h2 class="card-title">
+          <span>📤 Nộp bot & Chấm với Bot mẫu</span>
+        </h2>
+        <p class="hint">Chọn file Python (.py, tối đa 64 KB). Khi nộp, hệ thống sẽ kích hoạt trận đấu BO2 đối đầu trực
+          tiếp với Bot mẫu của ban tổ chức để tính điểm và chấm các tiêu chí!</p>
+
+        <form id="submit-form">
+          <label for="botfile">Chọn file bot Python (.py)</label>
+          <input id="botfile" type="file" accept=".py,text/x-python" required>
+          <div class="row" style="margin-top: 14px;">
+            <button class="btn success" id="submit-btn" type="submit" style="flex:1;">
+              🚀 Nộp bài & Chấm điểm với Bot mẫu
+            </button>
+          </div>
+        </form>
+
+        <!-- THANH TRẠNG THÁI TÍNH ĐIỂM (PROGRESS PIPELINE) -->
+        <div class="progress-card" id="judging-progress">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <strong id="progress-phase-title">⏳ Đang tiến hành chấm điểm...</strong>
+            <span id="progress-percent" style="font-weight:700; color:#818cf8;">25%</span>
+          </div>
+          <div class="progress-bar-wrap">
+            <div class="progress-bar-fill" id="progress-bar-fill"></div>
+          </div>
+          <div class="progress-steps" id="progress-step-desc">
+            Khởi tạo môi trường sandbox và kiểm tra cú pháp bot...
+          </div>
+        </div>
+
+        <!-- MÀN HÌNH CÁC TIÊU CHÍ CHẤM VÀ ĐIỂM KẾT QUẢ CUỐI CÙNG -->
+        <div class="scorecard" id="evaluation-scorecard">
+          <div class="scorecard-header">
+            <div class="scorecard-title">
+              <span>🎯 Kết quả chấm đối đầu Bot mẫu:</span>
+              <span id="match-badge" class="tag pass">ĐẠT CHUẨN</span>
+            </div>
+            <div id="match-summary-score" style="font-size:1.15rem; font-weight:800; color:#4f46e5;">
+              Điểm ván: +2 | Điểm trận: +1
+            </div>
+          </div>
+
+          <!-- Lưới 4 tiêu chí chấm -->
+          <div class="criteria-grid" id="criteria-container"></div>
+
+          <!-- Chi tiết 2 ván đấu -->
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Ván</th>
+                  <th>Lượt đi</th>
+                  <th>Số nước</th>
+                  <th>Quân ăn</th>
+                  <th>Quân mất</th>
+                  <th>Kết quả</th>
+                  <th>Diễn biến chính</th>
+                </tr>
+              </thead>
+              <tbody id="games-table-body"></tbody>
+            </table>
+          </div>
+
+          <!-- Lời khuyên thuật toán -->
+          <div id="tips-container"
+            style="margin-top:12px; font-size:0.86rem; color:#475569; background:#fff; padding:10px 14px; border-radius:8px; border:1px solid #e2e8f0;">
+          </div>
+
+          <div style="margin-top: 14px; text-align:right;">
+            <button class="btn secondary sm" id="btn-load-match-replay" type="button">
+              🎬 Xem diễn biến trận đấu này trên bàn cờ Replay
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- KHỐI 3: HIỂN THỊ CODE BOT MẪU -->
+      <section class="card wide">
+        <div class="card-title">
+          <span>🤖 Mã nguồn Bot Mẫu Đối Kháng (sample_bot.py)</span>
+          <div class="row">
+            <button class="btn secondary sm" id="copy-code-btn" type="button">📋 Sao chép code</button>
+            <a class="btn secondary sm" href="/sample_bot.py" download="sample_bot.py">📥 Tải sample_bot.py</a>
+          </div>
+        </div>
+        <p class="hint">
+          Đây là bot chuẩn của ban tổ chức mà bot của bạn sẽ thi đấu đối đầu trực tiếp. Thuật toán bot mẫu tuân thủ
+          nghiêm ngặt 4 mức ưu tiên:
+          <strong>(1) Thắng ngay</strong> ➔ <strong>(2) Ăn quân an toàn</strong> ➔ <strong>(3) Tiến dần về đích</strong>
+          ➔ <strong>(4) Né quân khắc</strong>.
+        </p>
+
+        <div class="code-viewer-wrap">
+          <div class="code-header">
+            <span class="code-title">Python 3 — sample_bot.py</span>
+            <span style="color:#64748b; font-size:0.75rem;">Chuẩn giao thức stdin/stdout</span>
+          </div>
+          <pre class="code-content" id="sample-bot-code-box">Đang tải mã nguồn bot mẫu...</pre>
+        </div>
+      </section>
+
+      <!-- KHỐI 4: BẢNG XẾP HẠNG BẢNG ĐẤU -->
+      <section class="card wide">
+        <div class="card-title">
+          <span>🏆 Bảng xếp hạng trong bảng của bạn</span>
+          <span class="hint" id="lb-hint" style="margin:0;">Ngày thi đấu mới nhất</span>
+        </div>
+        <div id="lb-container" class="empty-state">Đang tải bảng xếp hạng...</div>
+      </section>
+
+      <!-- KHỐI 5: PHÁT LẠI TRẬN ĐẤU (REPLAY) -->
+      <section class="card wide" id="replay-section">
+        <h2 class="card-title">🎬 Xem lại trận đấu (Replay)</h2>
+        <p class="hint">Theo dõi từng nước đi của các cặp đấu trên bàn cờ trực quan 9x9.</p>
+        <div class="row" style="margin-bottom: 12px;">
+          <div style="flex:1; min-width:140px;">
+            <label for="replay-day">Ngày thi:</label>
+            <select id="replay-day"></select>
+          </div>
+          <div style="flex:2; min-width:200px;">
+            <label for="replay-match">Cặp đấu:</label>
+            <select id="replay-match"></select>
+          </div>
+          <div style="flex:1; min-width:140px;">
+            <label for="replay-game">Ván đấu:</label>
+            <select id="replay-game"></select>
+          </div>
+        </div>
+
+        <div id="replay-message" class="empty-state">Đang tải danh sách trận đấu...</div>
+
+        <div id="replay-view" class="hidden">
+          <div id="replay-board" class="replay-board"></div>
+          <div id="replay-caption" style="text-align:center; font-weight:600; margin-bottom:8px; font-size:0.95rem;">
+          </div>
+          <div class="replay-controls">
+            <button class="btn secondary sm" id="replay-prev" type="button">◀ Nước trước</button>
+            <button class="btn sm" id="replay-play" type="button">▶ Phát tự động</button>
+            <button class="btn secondary sm" id="replay-next" type="button">Nước sau ▶</button>
+            <input id="replay-step" type="range" min="0" max="0" value="0">
+            <span id="replay-step-label" style="font-weight:600; font-size:0.88rem; min-width:60px;">0 / 0</span>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- MODAL THỂ LỆ -->
   <div id="rules-modal" class="modal-backdrop" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="rules-title">
       <div class="modal-header">
-        <h2 id="rules-title">Thể lệ cuộc thi</h2>
-        <button class="close-btn" id="rules-close" type="button">Đóng</button>
+        <h3 id="rules-title" style="margin:0;">Thể lệ giải đấu OTTv2</h3>
+        <button class="btn secondary sm" id="rules-close" type="button">✕ Đóng</button>
       </div>
       <div class="modal-body">
-        <p><strong>1. Mục tiêu:</strong> Mỗi bot sẽ điều khiển quân của mình để tiến tới điểm đích và đánh bại quân đối thủ theo quy tắc thắng thua của trò chơi.</p>
-        <p><strong>2. Giao thức:</strong> Bot đọc 1 dòng JSON từ stdin và phải in ra 1 dòng dạng <code>x y nx ny</code> cho mỗi nước đi.</p>
-        <p><strong>3. Luật trò chơi:</strong></p>
+        <h4>1. Cấu trúc giải đấu</h4>
         <ul>
-          <li>Loại quân: 0 = Búa, 1 = Bao, 2 = Kéo.</li>
-          <li>Quy tắc thắng thua: Búa &gt; Bao, Bao &gt; Kéo, Kéo &gt; Búa.</li>
-          <li>Mỗi bot có tối đa 1 giây cho mỗi nước đi (vòng đầu có thể là 3 giây).</li>
-          <li>Bàn cờ có kích thước 9x9, quân di chuyển theo các ô lân cận.</li>
-          <li>Nếu nước đi đi vào ô đích của đối thủ hoặc ăn được quân đối thủ theo quy tắc, nước đó được xem là hợp lệ.</li>
+          <li><strong>Đầu vào:</strong> Thí sinh nộp bot thi đấu với bot mẫu BTC để đánh giá tiêu chuẩn và chia vào 40
+            bảng.</li>
+          <li><strong>5 Vòng trong 5 tuần:</strong> Mỗi ngày nộp bài trước 24:00, chấm từ 01:00 đến 05:00 sáng.</li>
+          <li><strong>Tham gia tích cực:</strong> Thí sinh phải nộp tối thiểu 4 trong 6 ngày đầu tiên của tuần mới đủ
+            điều kiện tranh tài ở ngày cuối tuần.</li>
+          <li><strong>Vé vớt (Wildcard):</strong> Xét trung bình thứ hạng qua các ngày cho các thí sinh có phong độ cao
+            nhưng sảy chân ở ngày cuối.</li>
         </ul>
-        <p><strong>4. Đăng ký và nộp bài:</strong> Thí sinh tạo tài khoản, nhận token, sau đó upload file bot Python và nộp bài trên hệ thống. Mỗi lần nộp đều thay thế bot hiện tại.</p>
-        <p><strong>5. Chấm điểm:</strong> Kết quả trận đấu được tính theo số ván thắng, hòa và thua; người thắng sẽ tiến lên vòng tiếp theo theo lịch thi đấu của giải.</p>
+        <h4>2. Luật trận đấu BO2</h4>
+        <ul>
+          <li>Mỗi cặp đấu gồm 2 ván, mỗi bên cầm quân đi trước 1 lần.</li>
+          <li>Thắng trận được +1 điểm, thua -1 điểm, hòa 0 điểm. Không nộp bài xử thua (-1 điểm).</li>
+          <li>Mỗi ngày thi đấu 7 trận theo thể thức bắt cặp cùng điểm số.</li>
+        </ul>
       </div>
     </div>
   </div>
-  <div id="notice" role="status"></div>
-  <main class="grid">
-    <section class="card" id="register-card">
-      <h2>Tạo tài khoản</h2>
-      <p class="hint">Tên gồm 3–20 ký tự: chữ cái, chữ số hoặc dấu gạch dưới.</p>
-      <form id="register-form"><label for="name">Tên thi đấu</label><input id="name" required minlength="3" maxlength="20" pattern="[A-Za-z0-9_]+" placeholder="ten_cua_ban"><button type="submit">Đăng ký</button></form>
-    </section>
-    <section class="card">
-      <h2>Tài khoản của bạn</h2>
-      <p class="hint">Token được lưu trên trình duyệt này. Hãy giữ kín token.</p>
-      <label for="token">Token</label><div class="row"><input id="token" type="text" autocomplete="off" placeholder="Token đăng ký"><button class="secondary" id="copy-token" type="button">Sao chép token</button><button class="secondary" id="save-token" type="button">Lưu token</button></div>
-      <div class="row"><button id="refresh" type="button">Xem trạng thái</button><button class="secondary" id="clear-token" type="button">Đăng xuất</button></div>
-    </section>
-    <section class="card">
-      <h2>Nộp bot</h2><p class="hint">Chọn file Python, tối đa 64 KB.</p>
-      <form id="submit-form"><label for="botfile">File bot (.py)</label><input id="botfile" type="file" accept=".py,text/x-python" required><button type="submit">Nộp bài</button></form>
-    </section>
-    <section class="card">
-      <h2>Trạng thái thi đấu</h2><div id="status" class="empty">Nhập token hoặc đăng ký để xem trạng thái.</div>
-    </section>
-    <section class="card wide">
-      <h2>Xem lại trận đấu</h2>
-      <p class="hint">Chọn một ngày đã chấm để xem các trận trong bảng của bạn.</p>
-      <div class="row">
-        <label for="replay-day">Ngày thi</label><select id="replay-day"></select>
-        <label for="replay-match">Trận</label><select id="replay-match"></select>
-        <label for="replay-game">Ván</label><select id="replay-game"></select>
-      </div>
-      <div id="replay-message" class="empty">Đăng nhập để tải các trận đã chấm.</div>
-      <div id="replay-view" class="hidden">
-        <div id="replay-board" class="replay-board"></div>
-        <div id="replay-caption" class="hint"></div>
-        <div class="replay-controls">
-          <button class="secondary" id="replay-prev" type="button">Lùi</button>
-          <button id="replay-play" type="button">Phát</button>
-          <button class="secondary" id="replay-next" type="button">Tiến</button>
-          <input id="replay-step" type="range" min="0" max="0" value="0" aria-label="Nước đi">
-          <span id="replay-step-label">0 / 0</span>
+
+  <script>
+    const csrfToken = {{ csrf| tojson }};
+    const myUsername = {{ user.username| tojson }};
+    const $ = id => document.getElementById(id);
+    const escapeHtml = str => String(str ?? "—").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+    // =========================================================================
+    // 🎯 ĐIỀN URL ĐƯỢC CẤP (CLOUDFLARE TUNNEL HOẶC SERVER DOMAIN) TẠI ĐÂY:
+    // - Mặc định (khi mở trang từ server.py trên port 8000): để trống ""
+    // - Khi server chấm đặt ở máy khác: điền URL server chấm (ví dụ: "http://localhost:8000")
+    // (LƯU Ý: Không điền port 8100 vì port 8100 là Storage server chỉ chứa replay)
+    // =========================================================================
+    const SCORING_API_BASE = "";
+
+    let latestTestResult = null;
+
+    function showNotice(text, type = "ok") {
+      const el = $("notice");
+      el.textContent = text;
+      el.className = type;
+      el.style.display = "block";
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    async function api(path, options = {}) {
+      const headers = { ...(options.headers || {}) };
+      if (options.method && options.method !== "GET") {
+        headers["X-CSRF-Token"] = csrfToken;
+      }
+      const fullUrl = path.startsWith("http") ? path : `${SCORING_API_BASE}${path}`;
+      const res = await fetch(fullUrl, { ...options, headers });
+      if (res.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || `Lỗi ${res.status}: Thao tác không thành công`);
+      }
+      return data;
+    }
+
+    // Tải code của bot mẫu
+    async function loadSampleBotCode() {
+      try {
+        const res = await fetch("/sample-bot-code");
+        const data = await res.json();
+        if (data.ok && data.code) {
+          $("sample-bot-code-box").textContent = data.code;
+        }
+      } catch (err) {
+        $("sample-bot-code-box").textContent = "# Không tải được mã nguồn bot mẫu: " + err.message;
+      }
+    }
+
+    $("copy-code-btn").onclick = () => {
+      const text = $("sample-bot-code-box").textContent;
+      navigator.clipboard.writeText(text).then(() => {
+        showNotice("Đã sao chép mã nguồn bot mẫu vào Clipboard!");
+      }).catch(() => {
+        showNotice("Sao chép thất bại, hãy bôi đen code để copy thủ công.", "error");
+      });
+    };
+
+    // Đăng xuất
+    $("logout-btn").onclick = async () => {
+      try {
+        await api("/auth/logout", { method: "POST" });
+        window.location.href = "/login";
+      } catch {
+        window.location.href = "/login";
+      }
+    };
+
+    // Hiệu ứng thanh trạng thái tính điểm
+    function updateProgressBar(percent, title, stepDesc) {
+      $("judging-progress").style.display = "block";
+      $("progress-percent").textContent = `${percent}%`;
+      $("progress-bar-fill").style.width = `${percent}%`;
+      $("progress-phase-title").textContent = title;
+      $("progress-step-desc").textContent = stepDesc;
+    }
+
+    function hideProgressBar() {
+      setTimeout(() => {
+        $("judging-progress").style.display = "none";
+      }, 1200);
+    }
+
+    // Nộp bot & Chấm đối đầu với bot mẫu
+    $("submit-form").onsubmit = async (e) => {
+      e.preventDefault();
+      const file = $("botfile").files[0];
+      if (!file) return showNotice("Vui lòng chọn file .py!", "error");
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const btn = $("submit-btn");
+      btn.disabled = true;
+      $("evaluation-scorecard").style.display = "none";
+
+      // Thanh trạng thái giai đoạn 1
+      updateProgressBar(25, "🔍 [1/4] Kiểm tra tính hợp lệ & sandbox...", "Đang biên dịch cú pháp Python và nộp bài vào hệ thống...");
+
+      try {
+        // Giả lập trạng thái chuyển động mượt mà
+        setTimeout(() => {
+          updateProgressBar(50, "⚔️ [2/4] Thi đấu Ván 1 (Thí sinh đi trước)...", "Bot của bạn đang đối đầu trực tiếp với Bot mẫu (sample_bot)...");
+        }, 500);
+
+        setTimeout(() => {
+          updateProgressBar(75, "🛡️ [3/4] Thi đấu Ván 2 (Bot mẫu đi trước)...", "Bot mẫu cầm quân đi trước, kiểm tra khả năng phòng thủ...");
+        }, 1100);
+
+        const res = await api("/submit?evaluate=1", {
+          method: "POST",
+          body: formData
+        });
+
+        updateProgressBar(100, "📊 [4/4] Tổng hợp tiêu chí & Đánh giá kết quả!", "Hoàn tất chấm điểm trận đấu BO2.");
+        hideProgressBar();
+
+        showNotice("🎉 Nộp bot thành công! Đã có kết quả đánh giá tiêu chí với Bot mẫu bên dưới.");
+        $("botfile").value = "";
+        await refreshStatus();
+
+        if (res.evaluation) {
+          displayEvaluation(res.evaluation);
+        }
+      } catch (err) {
+        hideProgressBar();
+        showNotice(err.message, "error");
+      } finally {
+        btn.disabled = false;
+      }
+    };
+
+    // Hiển thị màn hình các tiêu chí chấm và điểm kết quả cuối cùng
+    function displayEvaluation(evalData) {
+      latestTestResult = evalData;
+      const card = $("evaluation-scorecard");
+      card.style.display = "block";
+
+      // Header badge
+      const badge = $("match-badge");
+      badge.textContent = evalData.status_badge;
+      badge.className = `tag ${evalData.passed ? 'pass' : 'warn'}`;
+
+      $("match-summary-score").textContent = `${evalData.match_result} (Điểm ván: ${evalData.match_score > 0 ? '+' : ''}${evalData.match_score} | Điểm trận: ${evalData.match_pts > 0 ? '+' : ''}${evalData.match_pts})`;
+
+      // Lưới 4 tiêu chí
+      const crits = evalData.criteria || {};
+      let critsHtml = "";
+      for (const key in crits) {
+        const c = crits[key];
+        critsHtml += `
+        <div class="criteria-card">
+          <div class="crit-name">${escapeHtml(c.name)}</div>
+          <div class="crit-score">${escapeHtml(c.score)}</div>
+          <div class="crit-desc">${escapeHtml(c.desc)}</div>
         </div>
-      </div>
-    </section>
-    <section class="card wide"><h2>Viết bot như thế nào?</h2><p>Mỗi lượt bot nhận trạng thái bàn cờ dạng JSON và in nước đi <code>x y nx ny</code>. <a href="/sample_bot.py" target="_blank" rel="noopener">Xem mã nguồn bot mẫu</a> để bắt đầu.</p></section>
-  </main>
-<script>
-  const $ = id => document.getElementById(id);
-  const escapeHtml = value => String(value ?? "—").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
-  const notice = (text, kind = "ok") => { const el = $("notice"); el.textContent = text; el.className = kind; el.style.display = "block"; window.scrollTo({top:0,behavior:"smooth"}); };
-  const token = () => $("token").value.trim();
-  const headers = () => ({"X-Token": token()});
-  async function api(path, options = {}) {
-    const response = await fetch(path, options);
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "Yêu cầu không thành công");
-    return data;
-  }
-  async function refreshChampion() {
-    try {
-      const data = await api("/champion");
-      if (data.champion) {
-        $("champion-announcement").textContent = `🏆 Nhà vô địch cuộc thi: ${data.champion}`;
-        $("champion-announcement").style.display = "block";
+      `;
       }
-    } catch (e) {
-      console.error("Không tải được thông tin nhà vô địch.", e);
+      $("criteria-container").innerHTML = critsHtml;
+
+      // Bảng 2 ván đấu
+      const games = evalData.games || [];
+      $("games-table-body").innerHTML = games.map(g => `
+      <tr>
+        <td><strong>Ván ${g.game_number}</strong></td>
+        <td><small>${escapeHtml(g.role)}</small></td>
+        <td>${g.total_plies} nước</td>
+        <td><strong>+${g.user_captures}</strong></td>
+        <td><span style="color:#dc2626;">-${g.user_losses}</span></td>
+        <td><strong>${escapeHtml(g.result_text)}</strong></td>
+        <td><small>${escapeHtml(g.end_reason)}</small></td>
+      </tr>
+    `).join("");
+
+      // Tips
+      const tips = evalData.tips || [];
+      $("tips-container").innerHTML = `<strong>💡 Gợi ý cải tiến:</strong><ul style="margin:5px 0 0 16px; padding:0;">${tips.map(t => `<li>${escapeHtml(t)}</li>`).join("")}</ul>`;
+
+      // Cuộn nhẹ tới kết quả
+      card.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
-  }
-  refreshChampion();
-  setInterval(refreshChampion, 5000);
-  function saveToken(value) {
-    $("token").value = value;
-    try {
-      localStorage.setItem("ott_token", value);
-      if (localStorage.getItem("ott_token") !== value) throw new Error("Token không được lưu lại.");
-      return true;
-    } catch (e) {
-      notice("Trình duyệt không cho lưu token. Token vẫn đang hiện trong ô; hãy sao chép và giữ lại.", "error");
-      return false;
-    }
-  }
-  try { $("token").value = localStorage.getItem("ott_token") || ""; }
-  catch (e) { notice("Trình duyệt đang chặn bộ nhớ lưu token. Hãy bật lưu dữ liệu trang web hoặc sao chép token để giữ lại.", "error"); }
-  $("copy-token").onclick = async () => {
-    if (!token()) return notice("Chưa có token để sao chép.", "error");
-    $("token").focus();
-    $("token").select();
-    try {
-      if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(token());
-        notice("Đã sao chép token. Bạn có thể dán bằng Ctrl+V.");
-        return;
+
+    // Tải trận đấu vừa test vào Replay viewer
+    $("btn-load-match-replay").onclick = () => {
+      if (!latestTestResult || !latestTestResult.raw_games) return;
+      const testMatch = {
+        a: myUsername,
+        b: "sample_bot",
+        rd: "Test",
+        s: latestTestResult.match_score,
+        games: latestTestResult.raw_games
+      };
+      replayMatches = [testMatch];
+      $("replay-match").innerHTML = `<option value="0">Trận đấu thử với sample_bot (${testMatch.s > 0 ? '+' : ''}${testMatch.s})</option>`;
+      $("replay-message").classList.add("hidden");
+      renderSelectedMatch();
+      $("replay-section").scrollIntoView({ behavior: "smooth" });
+      showNotice("Đã tải trận đấu với bot mẫu vào bàn cờ Replay bên dưới. Bạn có thể bấm Phát hoặc tua nước đi!", "info");
+    };
+
+    // Tải trạng thái thí sinh
+    async function refreshStatus() {
+      try {
+        const d = await api("/me");
+        if (!d) return;
+        const statusClass = d.status === "active" ? "active" : (d.status === "out" ? "out" : "new");
+        const items = [
+          ["Thí sinh", escapeHtml(d.name)],
+          ["Trạng thái", `<span class="tag ${statusClass}">${escapeHtml(d.status)}</span>`],
+          ["Giai đoạn", escapeHtml(d.phase)],
+          ["Vòng đấu", escapeHtml(d.round ?? "Chưa bắt đầu")],
+          ["Ngày mở", escapeHtml(d.open_day ?? "—")],
+          ["Bảng", escapeHtml(d.group !== undefined ? `Bảng ${d.group}` : "Chưa chia")],
+          ["Điểm đầu vào", escapeHtml(d.entry ?? "Chưa chấm")],
+          ["Hạng TB", escapeHtml(d.avg_rank ?? "—")]
+        ];
+        $("status-container").className = "status-grid";
+        $("status-container").innerHTML = items.map(([k, v]) => `
+        <div class="stat-box">
+          <small>${k}</small>
+          <strong>${v}</strong>
+        </div>
+      `).join("");
+      } catch (err) {
+        $("status-container").className = "empty-state";
+        $("status-container").textContent = err.message;
       }
-      if (document.execCommand("copy")) {
-        notice("Đã sao chép token. Bạn có thể dán bằng Ctrl+V.");
-        return;
+    }
+
+    // Tải BXH bảng của mình
+    async function refreshLeaderboard() {
+      try {
+        const data = await api("/leaderboard");
+        if (!Array.isArray(data) || !data.length) {
+          $("lb-container").className = "empty-state";
+          $("lb-container").textContent = "Chưa có bảng điểm được công bố cho bảng của bạn.";
+          return;
+        }
+        let html = `<div class="table-wrap"><table>
+        <thead><tr><th>Hạng</th><th>Thí sinh</th><th>Điểm trận (PTS)</th><th>Hiệu số ván (GS)</th></tr></thead>
+        <tbody>`;
+        data.forEach(row => {
+          const isMe = myUsername && row.name.toLowerCase() === myUsername.toLowerCase();
+          html += `<tr class="${isMe ? 'highlight' : ''}">
+          <td><strong>#${escapeHtml(row.rank)}</strong></td>
+          <td>${escapeHtml(row.name)} ${isMe ? '⭐ (Bạn)' : ''}</td>
+          <td><strong>${row.pts > 0 ? '+' : ''}${row.pts}</strong></td>
+          <td>${row.gs > 0 ? '+' : ''}${row.gs}</td>
+        </tr>`;
+        });
+        html += `</tbody></table></div>`;
+        $("lb-container").className = "";
+        $("lb-container").innerHTML = html;
+      } catch (err) {
+        $("lb-container").className = "empty-state";
+        $("lb-container").textContent = "Không tải được bảng xếp hạng: " + err.message;
       }
-    } catch (e) {
-      // Tiếp tục bằng cách chọn token để người dùng sao chép thủ công.
     }
-    notice("Token đã được chọn nhưng trình duyệt chặn sao chép tự động. Nhấn Ctrl+C (điện thoại: nhấn giữ token rồi chọn Sao chép).", "error");
-  };
-  $("save-token").onclick = () => { if (!token()) return notice("Vui lòng nhập token.", "error"); if (saveToken(token())) notice("Đã lưu token trên trình duyệt này."); };
-  $("clear-token").onclick = () => { localStorage.removeItem("ott_token"); $("token").value = ""; $("status").textContent = "Đã đăng xuất."; notice("Đã xóa token khỏi trình duyệt."); };
-  $("register-form").onsubmit = async event => { event.preventDefault(); try { const data = await api("/register", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:$("name").value.trim()})}); if (saveToken(data.token)) notice("Đăng ký thành công! Token đã được lưu trên trình duyệt."); else notice("Đăng ký thành công nhưng trình duyệt không lưu được token. Hãy sao chép token đang hiện trong ô.", "error"); await refreshAll(); } catch(e) { notice(e.message, "error"); } };
-  $("submit-form").onsubmit = async event => { event.preventDefault(); if (!token()) return notice("Hãy đăng nhập hoặc đăng ký trước khi nộp bot.", "error"); const file = $("botfile").files[0]; if (!file) return; const form = new FormData(); form.append("file",file); try { await api("/submit", {method:"POST",headers:headers(),body:form}); notice("Nộp bot thành công."); await refreshAll(); } catch(e) { notice(e.message, "error"); } };
-  async function refreshStatus() { if (!token()) return notice("Hãy nhập token hoặc đăng ký trước.", "error"); try { const d = await api("/me",{headers:headers()}); const rows = [["Người chơi",d.name],["Trạng thái",d.status],["Giai đoạn",d.phase],["Vòng",d.round ?? "—"],["Ngày mở",d.open_day ?? "—"],["Bảng",d.group ?? "Chưa chia bảng"],["Điểm đầu vào",d.entry ?? "—"],["Hạng trung bình",d.avg_rank ?? "—"]]; $("status").className="status"; $("status").innerHTML=rows.map(([k,v])=>`<div class="stat"><small>${k}</small><strong>${v}</strong></div>`).join(""); } catch(e) { notice(e.message,"error"); } }
-  let replayMatches = [];
-  let replayTimer = null;
-  let replayStep = 0;
-  function selectedReplay() { return replayMatches[Number($("replay-match").value)]; }
-  function selectedGame() { const match=selectedReplay(); return match?.games?.[Number($("replay-game").value)]; }
-  function drawReplay() {
-    const match=selectedReplay(), game=selectedGame();
-    if (!match || !game) { $("replay-view").classList.add("hidden"); return; }
-    $("replay-view").classList.remove("hidden");
-    const names={a:match.a,b:match.b}, total=game.moves.length;
-    const board=new Map();
-    for (let x=0;x<9;x++) { board.set(`${x},0`,{player:0,type:x%3}); board.set(`${x},8`,{player:1,type:x%3}); }
-    for (const [,move] of game.moves.slice(0,replayStep)) {
-      const [x,y,nx,ny]=move, piece=board.get(`${x},${y}`);
-      board.delete(`${x},${y}`);
-      if (piece) board.set(`${nx},${ny}`,piece);
-    }
-    let svg='<svg viewBox="0 0 475 475" role="img" aria-label="Bàn cờ phát lại trận đấu">';
-    const icons=["✊","✋","✌"];
-    for(let y=0;y<9;y++) for(let x=0;x<9;x++) {
-      const px=25+x*50, py=25+y*50, goal=(x===8&&y===8)||(x===0&&y===0);
-      const border=goal?"#4f46e5":"#cbd5e1", borderWidth=goal?3:1;
-      svg+=`<rect x="${px}" y="${py}" width="50" height="50" fill="${(x+y)%2?"#eef1f7":"#fff"}" stroke="${border}" stroke-width="${borderWidth}"/>`;
-      const piece=board.get(`${x},${y}`);
-      if(piece) svg+=`<circle cx="${px+25}" cy="${py+25}" r="17" fill="${game.players[piece.player]==="a"?"#4f46e5":"#dc2626"}"/><text x="${px+25}" y="${py+31}" fill="white" font-size="18" text-anchor="middle">${icons[piece.type]}</text>`;
-    }
-    svg+="</svg>";
-    $("replay-board").innerHTML=svg;
-    const lastPlayer=replayStep ? game.players[game.moves[replayStep-1][0]] : null;
-    $("replay-caption").textContent=`Đang xem: ${names[game.players[0]]} (xanh) vs ${names[game.players[1]]} (đỏ) · ${lastPlayer ? `Nước vừa đi: ${names[lastPlayer]}` : "Bắt đầu ván"}`;
-    $("replay-step").max=String(total);
-    $("replay-step").value=String(replayStep);
-    $("replay-step-label").textContent=`${replayStep} / ${total}`;
-    $("replay-prev").disabled=replayStep===0;
-    $("replay-next").disabled=replayStep===total;
-  }
-  function stopReplay() { if(replayTimer){clearInterval(replayTimer);replayTimer=null;} $("replay-play").textContent="Phát"; }
-  async function refreshReplays(round,day) {
-    stopReplay();
-    if(!token()) { $("replay-message").textContent="Đăng nhập để tải các trận đã chấm."; return; }
-    try {
-      const params=new URLSearchParams();
-      if(round!==undefined&&day!==undefined){params.set("round",round);params.set("day",day);}
-      const data=await api(`/replays?${params}`,{headers:headers()});
-      const daySelect=$("replay-day");
-      daySelect.innerHTML=data.available.map(d=>`<option value="${d.round},${d.day}"${d.round===data.round&&d.day===data.day?" selected":""}>Vòng ${d.round} · Ngày ${d.day}</option>`).join("");
-      replayMatches=data.matches;
-      $("replay-match").innerHTML=replayMatches.map((m,i)=>`<option value="${i}">Trận ${m.rd}: ${escapeHtml(m.a)} vs ${escapeHtml(m.b)} (${m.s>0?"+":""}${m.s})</option>`).join("");
-      if(!replayMatches.length) {
+
+    // Replay
+    let replayMatches = [];
+    let replayTimer = null;
+    let replayStep = 0;
+
+    function selectedReplay() { return replayMatches[Number($("replay-match").value)]; }
+    function selectedGame() { const m = selectedReplay(); return m?.games?.[Number($("replay-game").value)]; }
+
+    function drawReplay() {
+      const match = selectedReplay(), game = selectedGame();
+      if (!match || !game) {
         $("replay-view").classList.add("hidden");
-        $("replay-message").textContent=data.available.length?"Ngày đã chấm nhưng bảng này không có trận đấu được ghi nhận. Có thể bảng chỉ có một thí sinh.":"Chưa có ngày thi nào được chấm trong bảng của bạn.";
+        return;
+      }
+      $("replay-view").classList.remove("hidden");
+      const names = { a: match.a, b: match.b };
+      const total = game.moves ? game.moves.length : 0;
+      const board = new Map();
+      for (let x = 0; x < 9; x++) {
+        board.set(`${x},0`, { player: 0, type: x % 3 });
+        board.set(`${x},8`, { player: 1, type: x % 3 });
+      }
+      if (game.moves) {
+        for (const [, move] of game.moves.slice(0, replayStep)) {
+          const [x, y, nx, ny] = move;
+          const piece = board.get(`${x},${y}`);
+          board.delete(`${x},${y}`);
+          if (piece) board.set(`${nx},${ny}`, piece);
+        }
+      }
+
+      let svg = '<svg viewBox="0 0 475 475" role="img">';
+      const icons = ["✊", "✋", "✌"];
+      for (let y = 0; y < 9; y++) {
+        for (let x = 0; x < 9; x++) {
+          const px = 25 + x * 50, py = 25 + y * 50;
+          const isGoal = (x === 8 && y === 8) || (x === 0 && y === 0);
+          const border = isGoal ? "#4f46e5" : "#cbd5e1";
+          const bw = isGoal ? 3 : 1;
+          svg += `<rect x="${px}" y="${py}" width="50" height="50" fill="${(x + y) % 2 ? "#eef2f6" : "#ffffff"}" stroke="${border}" stroke-width="${bw}"/>`;
+          const piece = board.get(`${x},${y}`);
+          if (piece) {
+            const color = game.players[piece.player] === "a" ? "#4f46e5" : "#dc2626";
+            svg += `<circle cx="${px + 25}" cy="${py + 25}" r="17" fill="${color}"/>`;
+            svg += `<text x="${px + 25}" y="${py + 31}" fill="white" font-size="18" text-anchor="middle">${icons[piece.type]}</text>`;
+          }
+        }
+      }
+      svg += "</svg>";
+      $("replay-board").innerHTML = svg;
+
+      const lastPlayer = (replayStep && game.moves) ? game.players[game.moves[replayStep - 1][0]] : null;
+      $("replay-caption").textContent = `Đang xem: ${names[game.players[0]]} (Xanh) vs ${names[game.players[1]]} (Đỏ) · ${lastPlayer ? `Nước vừa đi: ${names[lastPlayer]}` : "Bắt đầu ván"}`;
+      $("replay-step").max = String(total);
+      $("replay-step").value = String(replayStep);
+      $("replay-step-label").textContent = `${replayStep} / ${total}`;
+      $("replay-prev").disabled = replayStep === 0;
+      $("replay-next").disabled = replayStep === total;
+    }
+
+    function stopReplay() {
+      if (replayTimer) { clearInterval(replayTimer); replayTimer = null; }
+      $("replay-play").textContent = "▶ Phát tự động";
+    }
+
+    async function refreshReplays(round, day) {
+      stopReplay();
+      try {
+        const params = new URLSearchParams();
+        if (round !== undefined && day !== undefined) {
+          params.set("round", round);
+          params.set("day", day);
+        }
+        const data = await api(`/replays?${params}`);
+        if (!data) return;
+        const daySelect = $("replay-day");
+        daySelect.innerHTML = (data.available || []).map(d => `
+        <option value="${d.round},${d.day}" ${d.round === data.round && d.day === data.day ? "selected" : ""}>
+          Vòng ${d.round} · Ngày ${d.day}
+        </option>
+      `).join("");
+
+        replayMatches = data.matches || [];
+        $("replay-match").innerHTML = replayMatches.map((m, i) => `
+        <option value="${i}">Trận ${m.rd}: ${escapeHtml(m.a)} vs ${escapeHtml(m.b)} (${m.s > 0 ? "+" : ""}${m.s})</option>
+      `).join("");
+
+        if (!replayMatches.length) {
+          $("replay-view").classList.add("hidden");
+          $("replay-message").classList.remove("hidden");
+          $("replay-message").textContent = (data.available && data.available.length) ? "Ngày thi này chưa có trận đấu nào được ghi hình." : "Chưa có ngày thi nào được chấm trong bảng của bạn.";
+          return;
+        }
+        $("replay-message").classList.add("hidden");
+        renderSelectedMatch();
+      } catch (err) {
+        $("replay-message").classList.remove("hidden");
+        $("replay-message").textContent = err.message;
+      }
+    }
+
+    function renderSelectedMatch() {
+      const match = selectedReplay();
+      if (!match) return;
+      $("replay-game").innerHTML = (match.games || []).map((g, i) => `
+      <option value="${i}">Ván ${i + 1}: ${escapeHtml(g.players[0] === "a" ? match.a : match.b)} đi trước</option>
+    `).join("");
+      if (!match.games || !match.games.length) {
+        $("replay-view").classList.add("hidden");
+        $("replay-message").classList.remove("hidden");
+        $("replay-message").textContent = "Trận này không có dữ liệu ván đấu.";
         return;
       }
       $("replay-message").classList.add("hidden");
-      $("replay-match").disabled=false;
-      renderSelectedMatch();
-    } catch(e) { $("replay-message").classList.remove("hidden"); $("replay-message").textContent=e.message; }
-  }
-  function renderSelectedMatch() {
-    const match=selectedReplay();
-    if(!match) return;
-    $("replay-game").innerHTML=match.games.map((g,i)=>`<option value="${i}">Ván ${i+1}: ${escapeHtml(g.players[0]==="a"?match.a:match.b)} đi trước</option>`).join("");
-    if(!match.games.length) {
-      $("replay-view").classList.add("hidden");
-      $("replay-message").classList.remove("hidden");
-      $("replay-message").textContent="Trận này chưa có dữ liệu phát lại. Trận chấm trước khi bật tính năng hoặc trận thiếu bài sẽ không phát lại được.";
-      return;
+      replayStep = 0;
+      drawReplay();
     }
-    $("replay-message").classList.add("hidden");
-    replayStep=0; drawReplay();
-  }
-  $("replay-day").onchange=()=>{const [r,d]=$("replay-day").value.split(",");refreshReplays(Number(r),Number(d));};
-  $("replay-match").onchange=renderSelectedMatch;
-  $("replay-game").onchange=()=>{stopReplay();replayStep=0;drawReplay();};
-  $("replay-step").oninput=()=>{stopReplay();replayStep=Number($("replay-step").value);drawReplay();};
-  $("replay-prev").onclick=()=>{replayStep=Math.max(0,replayStep-1);drawReplay();};
-  $("replay-next").onclick=()=>{const game=selectedGame();if(game){replayStep=Math.min(game.moves.length,replayStep+1);drawReplay();}};
-  $("replay-play").onclick=()=>{if(replayTimer){stopReplay();return;}const game=selectedGame();if(!game)return;if(replayStep>=game.moves.length)replayStep=0;$("replay-play").textContent="Tạm dừng";replayTimer=setInterval(()=>{if(replayStep>=game.moves.length){stopReplay();return;}replayStep++;drawReplay();},650);};
-  async function refreshAll() { await refreshStatus(); }
-  const rulesModal=$("rules-modal");
-  $("rules-open").onclick=()=>rulesModal.classList.add("show");
-  $("rules-close").onclick=()=>rulesModal.classList.remove("show");
-  rulesModal.onclick=(e)=>{ if(e.target===rulesModal) rulesModal.classList.remove("show"); };
-  document.addEventListener("keydown", (e)=>{ if(e.key==="Escape") rulesModal.classList.remove("show"); });
-  $("refresh").onclick=refreshStatus;
-  refreshReplays();
-</script>
+
+    $("replay-day").onchange = () => {
+      const [r, d] = $("replay-day").value.split(",");
+      refreshReplays(Number(r), Number(d));
+    };
+    $("replay-match").onchange = renderSelectedMatch;
+    $("replay-game").onchange = () => { stopReplay(); replayStep = 0; drawReplay(); };
+    $("replay-step").oninput = () => { stopReplay(); replayStep = Number($("replay-step").value); drawReplay(); };
+    $("replay-prev").onclick = () => { replayStep = Math.max(0, replayStep - 1); drawReplay(); };
+    $("replay-next").onclick = () => {
+      const g = selectedGame();
+      if (g && g.moves) { replayStep = Math.min(g.moves.length, replayStep + 1); drawReplay(); }
+    };
+    $("replay-play").onclick = () => {
+      if (replayTimer) { stopReplay(); return; }
+      const g = selectedGame();
+      if (!g || !g.moves) return;
+      if (replayStep >= g.moves.length) replayStep = 0;
+      $("replay-play").textContent = "⏸ Tạm dừng";
+      replayTimer = setInterval(() => {
+        if (replayStep >= g.moves.length) { stopReplay(); return; }
+        replayStep++;
+        drawReplay();
+      }, 600);
+    };
+
+    async function checkChampion() {
+      try {
+        const data = await api("/champion");
+        if (data && data.champion) {
+          $("champion-banner").textContent = `🏆 Chúc mừng Nhà vô địch cuộc thi: ${data.champion}! 🏆`;
+          $("champion-banner").style.display = "block";
+        }
+      } catch { }
+    }
+
+    $("refresh-status-btn").onclick = async () => {
+      await refreshStatus();
+      showNotice("Đã cập nhật trạng thái mới nhất!");
+    };
+
+    // Modal Thể lệ
+    const modal = $("rules-modal");
+    $("rules-open").onclick = () => modal.classList.add("show");
+    $("rules-close").onclick = () => modal.classList.remove("show");
+    modal.onclick = (e) => { if (e.target === modal) modal.classList.remove("show"); };
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") modal.classList.remove("show"); });
+
+    // Khởi động
+    loadSampleBotCode();
+    refreshStatus();
+    refreshLeaderboard();
+    refreshReplays();
+    checkChampion();
+  </script>
 </body>
+
 </html>

@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Đăng nhập — Đấu Trường Bot OTTv2</title>
+  <style>
+    :root {
+      --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --surface-subtle: #334155;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --primary-light: rgba(99, 102, 241, 0.15);
+      --border: #334155;
+      --danger: #ef4444;
+      --danger-light: rgba(239, 68, 68, 0.15);
+      --success: #22c55e;
+      --success-light: rgba(34, 197, 94, 0.15);
+      --radius: 16px;
+      --shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: var(--font-family);
+      color: var(--text);
+      background: radial-gradient(circle at 50% 20%, #1e1b4b 0%, #0f172a 100%);
+      margin: 0;
+      display: flex;
+      min-height: 100vh;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+    }
+    .auth-card {
+      width: 100%;
+      max-width: 440px;
+      background: var(--surface);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: var(--radius);
+      padding: 36px 32px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+    .brand {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .brand-tag {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 0.14em;
+      color: #818cf8;
+      text-transform: uppercase;
+      background: rgba(99, 102, 241, 0.12);
+      padding: 4px 12px;
+      border-radius: 999px;
+      margin-bottom: 8px;
+    }
+    h1 {
+      margin: 0 0 6px;
+      font-size: 1.65rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+    .desc {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      margin: 0;
+    }
+    .tabs {
+      display: flex;
+      background: rgba(15, 23, 42, 0.6);
+      border-radius: 10px;
+      padding: 4px;
+      margin: 22px 0 20px;
+      gap: 4px;
+    }
+    .tab-btn {
+      flex: 1;
+      background: transparent;
+      border: 0;
+      color: var(--text-muted);
+      font-family: inherit;
+      font-weight: 600;
+      font-size: 0.88rem;
+      padding: 8px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .tab-btn.active {
+      background: var(--primary);
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+    }
+    .form-group {
+      margin-bottom: 16px;
+    }
+    label {
+      display: block;
+      font-size: 0.84rem;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: #cbd5e1;
+    }
+    input[type="text"], input[type="password"] {
+      width: 100%;
+      padding: 12px 14px;
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: #fff;
+      font: inherit;
+      font-size: 0.95rem;
+      transition: border-color 0.15s;
+    }
+    input[type="text"]:focus, input[type="password"]:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+    }
+    .btn-submit {
+      width: 100%;
+      padding: 13px;
+      border: 0;
+      border-radius: 10px;
+      background: var(--primary);
+      color: #fff;
+      font-family: inherit;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s;
+      margin-top: 8px;
+    }
+    .btn-submit:hover { background: var(--primary-hover); }
+    .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+    .alert {
+      padding: 12px 14px;
+      border-radius: 10px;
+      margin-bottom: 18px;
+      font-size: 0.88rem;
+      display: none;
+    }
+    .alert.error {
+      display: block;
+      background: var(--danger-light);
+      color: #fca5a5;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+    .alert.success {
+      display: block;
+      background: var(--success-light);
+      color: #86efac;
+      border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+    .alert.info {
+      display: block;
+      background: var(--primary-light);
+      color: #a5b4fc;
+      border: 1px solid rgba(99, 102, 241, 0.3);
+    }
+    .footer-note {
+      text-align: center;
+      margin-top: 24px;
+      padding-top: 18px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--text-muted);
+      font-size: 0.82rem;
+      line-height: 1.5;
+    }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="auth-card">
+    <div class="brand">
+      <span class="brand-tag">HỆ THỐNG THI ĐẤU BOT</span>
+      <h1>Đấu Trường OTTv2</h1>
+      <p class="desc">Vui lòng đăng nhập để vào giao diện giải đấu</p>
+    </div>
+
+    <div id="alert-box" class="alert" role="alert"></div>
+
+    {% if not configured %}
+      <div class="alert error" style="display:block;">
+        ⚠️ Máy chủ chưa cấu hình Supabase. Vui lòng thiết lập biến môi trường <code>SUPABASE_URL</code> và <code>SUPABASE_ANON_KEY</code> để kích hoạt xác thực.
+      </div>
+    {% endif %}
+
+    <div class="tabs">
+      <button class="tab-btn active" id="btn-tab-login" type="button">Đăng Nhập</button>
+      {% if open_registration %}
+        <button class="tab-btn" id="btn-tab-register" type="button">Đăng Ký Thí Sinh</button>
+      {% endif %}
+    </div>
+
+    <!-- Form Đăng nhập -->
+    <form id="login-form">
+      <div class="form-group">
+        <label for="login-username">Tên tài khoản (Thí sinh / Ban tổ chức)</label>
+        <input id="login-username" type="text" autocomplete="username" placeholder="Nhập tên tài khoản" required autofocus>
+      </div>
+      <div class="form-group">
+        <label for="login-password">Mật khẩu</label>
+        <input id="login-password" type="password" autocomplete="current-password" placeholder="Nhập mật khẩu" required>
+      </div>
+      <button class="btn-submit" id="login-submit-btn" type="submit">Vào Cuộc Thi</button>
+    </form>
+
+    <!-- Form Đăng ký -->
+    {% if open_registration %}
+      <form id="register-form" class="hidden">
+        <div class="form-group">
+          <label for="reg-username">Tên thi đấu mong muốn</label>
+          <input id="reg-username" type="text" autocomplete="username" pattern="[A-Za-z0-9_]{3,20}" placeholder="3–20 ký tự (a-z, 0-9, _)" required>
+        </div>
+        <div class="form-group">
+          <label for="reg-password">Mật khẩu tài khoản</label>
+          <input id="reg-password" type="password" autocomplete="new-password" minlength="8" placeholder="Tối thiểu 8 ký tự" required>
+        </div>
+        <button class="btn-submit" id="reg-submit-btn" type="submit">Tạo Tài Khoản & Tham Gia</button>
+      </form>
+    {% endif %}
+
+    <div class="footer-note">
+      Mật khẩu và thông tin tài khoản được quản lý bảo mật qua <strong>Supabase Auth</strong>.<br>
+      Tài khoản Ban tổ chức sẽ tự động chuyển đến bảng điều hành giải đấu.
+    </div>
+  </div>
+
+<script>
+  const csrfToken = {{ csrf|tojson }};
+  const nextUrl = new URLSearchParams(window.location.search).get("next") || "";
+
+  const $ = id => document.getElementById(id);
+  const alertBox = $("alert-box");
+
+  function showAlert(msg, type = "error") {
+    alertBox.textContent = msg;
+    alertBox.className = `alert ${type}`;
+  }
+  function hideAlert() {
+    alertBox.className = "alert";
+  }
+
+  const tabLogin = $("btn-tab-login");
+  const tabReg = $("btn-tab-register");
+  const formLogin = $("login-form");
+  const formReg = $("register-form");
+
+  if (tabLogin && tabReg) {
+    tabLogin.onclick = () => {
+      tabLogin.classList.add("active");
+      tabReg.classList.remove("active");
+      formLogin.classList.remove("hidden");
+      if (formReg) formReg.classList.add("hidden");
+      hideAlert();
+      $("login-username").focus();
+    };
+    tabReg.onclick = () => {
+      tabReg.classList.add("active");
+      tabLogin.classList.remove("active");
+      formLogin.classList.add("hidden");
+      if (formReg) formReg.classList.remove("hidden");
+      hideAlert();
+      $("reg-username").focus();
+    };
+  }
+
+  // Xử lý đăng nhập
+  formLogin.onsubmit = async (e) => {
+    e.preventDefault();
+    hideAlert();
+    const btn = $("login-submit-btn");
+    btn.disabled = true;
+    btn.textContent = "Đang xác thực...";
+
+    try {
+      const res = await fetch("/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrfToken
+        },
+        body: JSON.stringify({
+          username: $("login-username").value.trim(),
+          password: $("login-password").value,
+          next: nextUrl
+        })
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "Đăng nhập không thành công");
+      }
+
+      showAlert(`Đăng nhập thành công! Chào mừng ${data.user.username}`, "success");
+      setTimeout(() => {
+        window.location.href = data.redirect || "/";
+      }, 400);
+    } catch (err) {
+      showAlert(err.message, "error");
+      btn.disabled = false;
+      btn.textContent = "Vào Cuộc Thi";
+    }
+  };
+
+  // Xử lý đăng ký
+  if (formReg) {
+    formReg.onsubmit = async (e) => {
+      e.preventDefault();
+      hideAlert();
+      const btn = $("reg-submit-btn");
+      btn.disabled = true;
+      btn.textContent = "Đang khởi tạo...";
+
+      try {
+        const res = await fetch("/auth/register", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRF-Token": csrfToken
+          },
+          body: JSON.stringify({
+            username: $("reg-username").value.trim(),
+            password: $("reg-password").value
+          })
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data.error || "Đăng ký không thành công");
+        }
+
+        showAlert(`Đăng ký thành công! Đang chuyển vào phòng thi đấu...`, "success");
+        setTimeout(() => {
+          window.location.href = data.redirect || "/";
+        }, 500);
+      } catch (err) {
+        showAlert(err.message, "error");
+        btn.disabled = false;
+        btn.textContent = "Tạo Tài Khoản & Tham Gia";
+      }
+    };
+  }
+</script>
+</body>
+</html>
