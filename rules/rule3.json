@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "board": {
+    "width": 9,
+    "height": 9,
+    "walls": [
+      [3, 3],
+      [4, 3],
+      [5, 3],
+      [3, 5],
+      [4, 5],
+      [5, 5]
+    ],
+    "teleporters": [
+      {
+        "ends": [[1, 2], [7, 6]],
+        "behavior": "on_enter"
+      },
+      {
+        "ends": [[2, 6], [6, 2]],
+        "behavior": "on_enter"
+      },
+      {
+        "ends": [[4, 1], [4, 7]],
+        "behavior": "on_enter"
+      }
+    ]
+  }
+}
