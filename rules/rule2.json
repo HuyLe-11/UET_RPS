@@ -6,15 +6,21 @@
     "teleporters": [
       {
         "ends": [[1, 2], [7, 6]],
-        "behavior": "on_enter"
+        "activation": "piece_starts_turn_on_endpoint",
+        "use": "optional",
+        "occupied_destination": "capture_if_legal"
       },
       {
         "ends": [[2, 6], [6, 2]],
-        "behavior": "on_enter"
+        "activation": "piece_starts_turn_on_endpoint",
+        "use": "optional",
+        "occupied_destination": "capture_if_legal"
       },
       {
         "ends": [[4, 1], [4, 7]],
-        "behavior": "on_enter"
+        "activation": "piece_starts_turn_on_endpoint",
+        "use": "optional",
+        "occupied_destination": "capture_if_legal"
       }
     ]
   }
