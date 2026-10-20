@@ -65,7 +65,7 @@ def encode(b, me, ply):
             "pieces": [[x, y, o, t] for (x, y), (o, t) in b.items()]}
 
 
-def play(bots, max_plies=MAX_PLIES, moves=None):
+def play(bots, max_plies=MAX_PLIES, moves=None, on_move=None, delay=0.0):
     """bots[0] đi trước. Trả +1 nếu bots[0] thắng, -1 nếu thua, 0 hòa."""
     b = initial()
     for ply in range(max_plies):
@@ -77,10 +77,19 @@ def play(bots, max_plies=MAX_PLIES, moves=None):
         m = bots[p].move(encode(b, p, ply), FIRST_T if ply < 2 else MOVE_T)
         if m not in lm:
             return lose
+        captured = b.get((m[2], m[3]))
         b = apply(b, m)
         if moves is not None:
             moves.append((p, m))
-        if check_win(b, p, m):
+        is_win = check_win(b, p, m)
+        if on_move is not None:
+            try:
+                on_move(ply, p, m, captured, is_win)
+            except Exception:
+                pass
+        if delay > 0:
+            time.sleep(delay)
+        if is_win:
             return -lose
     return 0
 
@@ -245,7 +254,7 @@ def make_bot(spec):
     return FuncBot(BTC[int(spec[4:])]) if spec.startswith("btc:") else ProcBot(spec)
 
 
-def _play_match(args, record):
+def _play_match(args, record, on_move=None, delay=0.0):
     """args=(specA, specB), spec là đường dẫn file bot hoặc 'btc:k'. BO2, mỗi bên đi trước 1 ván.
     Trả tổng điểm của A; tùy chọn kèm dữ liệu nước đi từng ván."""
     a, b = args
@@ -254,8 +263,14 @@ def _play_match(args, record):
     for first in (0, 1):
         ba, bb = make_bot(a), make_bot(b)
         moves = [] if record else None
+
+        def game_on_move(ply, p, m, captured, is_win):
+            if on_move:
+                on_move(first, ply, p, m, captured, is_win)
+
         try:
-            raw = play([ba, bb] if first == 0 else [bb, ba], moves=moves)
+            raw = play([ba, bb] if first == 0 else [bb, ba], moves=moves,
+                       on_move=game_on_move if on_move else None, delay=delay)
             r = raw if first == 0 else -raw
         finally:
             ba.close(); bb.close()
@@ -269,12 +284,12 @@ def _play_match(args, record):
     return (s, games) if record else s
 
 
-def play_match_recorded(args):
-    return _play_match(args, True)
+def play_match_recorded(args, on_move=None, delay=0.0):
+    return _play_match(args, True, on_move=on_move, delay=delay)
 
 
-def play_match(args):
-    return _play_match(args, False)
+def play_match(args, on_move=None, delay=0.0):
+    return _play_match(args, False, on_move=on_move, delay=delay)
 
 
 if __name__ == "__main__" and len(sys.argv) == 3 and sys.argv[1] == "test":

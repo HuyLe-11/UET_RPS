@@ -96,15 +96,25 @@ def _bot_path(username: str, snap_dir: str) -> str | None:
     return p if os.path.exists(p) else None
 
 
+from . import db, live_manager
+
+
 def _run_match(task: dict) -> None:
     request_id = task["request_id"]
     match_id = task["match_id"]
     player_a = task["player_a"]
     player_b = task["player_b"]
     snap_dir = task.get("snap_dir", os.path.join(os.path.dirname(__file__), "..", "snaps", "finals"))
+    live_delay = float(task.get("live_delay", os.environ.get("FINALS_LIVE_DELAY", 0.35)))
 
-    logger.info("[MATCH:%s] Bắt đầu: %s vs %s", request_id, player_a, player_b)
+    logger.info("[MATCH:%s] Bắt đầu: %s vs %s (live_delay=%.2fs)", request_id, player_a, player_b, live_delay)
     _mark_running(match_id)
+    live_manager.publish(request_id, {
+        "type": "match_start",
+        "request_id": request_id,
+        "player_a": player_a,
+        "player_b": player_b,
+    })
 
     try:
         path_a = _bot_path(player_a, snap_dir)
@@ -114,8 +124,27 @@ def _run_match(task: dict) -> None:
             missing = [u for u, p in [(player_a, path_a), (player_b, path_b)] if p is None]
             raise FileNotFoundError(f"Không tìm thấy bot của: {', '.join(missing)}")
 
+        def on_move_callback(game_idx, ply, p, move, captured, is_win):
+            # first=0: p=0 là a, p=1 là b. first=1: p=0 là b, p=1 là a.
+            mover = player_a if (game_idx == 0 and p == 0) or (game_idx == 1 and p == 1) else player_b
+            live_manager.publish(request_id, {
+                "type": "move",
+                "request_id": request_id,
+                "game": game_idx,
+                "ply": ply,
+                "player": p,
+                "mover": mover,
+                "move": list(move),
+                "captured": list(captured) if captured else None,
+                "is_win": bool(is_win),
+            })
+
         t0 = time.monotonic()
-        score, games = game_engine.play_match_recorded((path_a, path_b))
+        score, games = game_engine.play_match_recorded(
+            (path_a, path_b),
+            on_move=on_move_callback,
+            delay=live_delay,
+        )
         elapsed = time.monotonic() - t0
 
         # score > 0 → A thắng; < 0 → B thắng; = 0 → hoà (mỗi trận BO2, tối đa ±2)
@@ -135,9 +164,23 @@ def _run_match(task: dict) -> None:
         _save_result(match_id, score_a, score_b, winner, games)
         _update_standings(player_a, player_b, score)
 
+        live_manager.publish(request_id, {
+            "type": "match_end",
+            "request_id": request_id,
+            "score_a": score_a,
+            "score_b": score_b,
+            "winner": winner,
+            "games": games,
+        })
+
     except Exception as exc:
         logger.exception("[MATCH:%s] Lỗi: %s", request_id, exc)
         _mark_failed(match_id, str(exc))
+        live_manager.publish(request_id, {
+            "type": "match_failed",
+            "request_id": request_id,
+            "error": str(exc),
+        })
 
 
 # ---------------------------------------------------------------------------
@@ -198,6 +241,7 @@ def enqueue_match(
     player_b: str,
     request_id: str | None = None,
     snap_dir: str | None = None,
+    live_delay: float | None = None,
 ) -> dict:
     """
     Tạo trận đấu mới và đẩy vào hàng đợi.
@@ -240,6 +284,8 @@ def enqueue_match(
     }
     if snap_dir:
         task["snap_dir"] = snap_dir
+    if live_delay is not None:
+        task["live_delay"] = live_delay
 
     try:
         _task_queue.put_nowait(task)
@@ -264,6 +310,25 @@ def get_match_status(request_id: str) -> dict | None:
            FROM matches WHERE request_id=%s""",
         (request_id,),
     )
+    return row
+
+
+def get_match_replay(request_id: str) -> dict | None:
+    """Trả về thông tin trận đấu kèm toàn bộ nước đi (replay)."""
+    import json
+    row = db.fetchone(
+        """SELECT id, request_id, player_a, player_b, status,
+                  score_a, score_b, winner, error_msg,
+                  created_at, started_at, finished_at, replay
+           FROM matches WHERE request_id=%s""",
+        (request_id,),
+    )
+    if row and row.get("replay"):
+        if isinstance(row["replay"], str):
+            try:
+                row["replay"] = json.loads(row["replay"])
+            except Exception:
+                pass
     return row
 
 

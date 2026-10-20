@@ -33,7 +33,9 @@ import os
 import sys
 import secrets
 
-from flask import Flask, request, jsonify, g, render_template
+from flask import Flask, request, jsonify, g, render_template, Response
+import json
+import queue
 
 from .logger_setup import setup as setup_logging
 
@@ -41,7 +43,7 @@ from .logger_setup import setup as setup_logging
 _log_level = os.environ.get("FINALS_LOG_LEVEL", "INFO")
 setup_logging(_log_level)
 
-from . import db, auth, match_runner
+from . import db, auth, match_runner, live_manager
 
 logger = logging.getLogger("finals.app")
 
@@ -90,14 +92,11 @@ def require_auth():
 
 
 def require_admin():
-    err = require_auth()
-    if err:
-        return err
-    # Kiểm tra thêm admin secret
+    # Ban tổ chức xác thực trực tiếp qua Admin Secret (không cần đăng nhập tài khoản thí sinh)
     supplied = request.headers.get("X-Admin-Secret", "")
     if not ADMIN_SECRET or not secrets.compare_digest(supplied, ADMIN_SECRET):
-        logger.warning("[APP] Truy cập admin bị từ chối từ %s", g.current_user.get("username"))
-        return jsonify(ok=False, error="Cần quyền ban tổ chức"), 403
+        logger.warning("[APP] Truy cập admin bị từ chối (Admin Secret không khớp)")
+        return jsonify(ok=False, error="Cần quyền ban tổ chức (Vui lòng nhập đúng Admin Secret ở tab Ban Tổ Chức)"), 403
     return None
 
 
@@ -211,8 +210,17 @@ def create_match():
         return jsonify(ok=False, error="Hai thí sinh không được là cùng một người"), 400
 
     logger.info("[APP] Yêu cầu tạo trận: %s vs %s (request_id=%s)", player_a, player_b, request_id)
+    live_delay = data.get("live_delay")
+    if live_delay is not None:
+        try:
+            live_delay = float(live_delay)
+        except Exception:
+            live_delay = None
+
     try:
-        result = match_runner.enqueue_match(player_a, player_b, request_id, snap_dir=FINALS_SNAP_DIR)
+        result = match_runner.enqueue_match(
+            player_a, player_b, request_id, snap_dir=FINALS_SNAP_DIR, live_delay=live_delay
+        )
     except RuntimeError as e:
         return jsonify(ok=False, error=str(e)), 503
 
@@ -221,20 +229,51 @@ def create_match():
 
 @app.get("/finals/matches/<request_id>")
 def get_match(request_id: str):
-    err = require_auth()
-    if err:
-        return err
     row = match_runner.get_match_status(request_id)
     if row is None:
         return jsonify(ok=False, error="Không tìm thấy trận đấu"), 404
     return jsonify(ok=True, match=row), 200
 
 
+@app.get("/finals/matches/<request_id>/replay")
+def get_match_replay(request_id: str):
+    row = match_runner.get_match_replay(request_id)
+    if row is None:
+        return jsonify(ok=False, error="Không tìm thấy trận đấu"), 404
+    return jsonify(ok=True, match=row), 200
+
+
+@app.get("/finals/matches/<request_id>/live")
+def match_live_stream(request_id: str):
+    """Stream trực tiếp nước đi của trận đấu theo thời gian thực (Server-Sent Events)."""
+    def event_generator():
+        q = live_manager.subscribe(request_id)
+        try:
+            yield f"data: {json.dumps({'type': 'connected', 'request_id': request_id})}\n\n"
+            while True:
+                try:
+                    event = q.get(timeout=25)
+                    yield f"data: {json.dumps(event)}\n\n"
+                    if event.get("type") in ("match_end", "match_failed"):
+                        break
+                except queue.Empty:
+                    yield ": keepalive\n\n"
+        finally:
+            live_manager.unsubscribe(request_id, q)
+
+    return Response(
+        event_generator(),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
+
+
 @app.get("/finals/matches")
 def list_matches():
-    err = require_auth()
-    if err:
-        return err
     page = max(1, request.args.get("page", 1, type=int))
     per_page = min(100, max(1, request.args.get("per_page", 20, type=int)))
     offset = (page - 1) * per_page
