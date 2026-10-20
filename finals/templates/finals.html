@@ -1,0 +1,700 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vòng Chung Kết OTT — Quản Lý & Thi Đấu</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <style>
+    :root {
+      --primary: #4f46e5;
+      --primary-hover: #4338ca;
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      padding: 24px 16px 60px;
+      max-width: 1100px;
+      margin: 0 auto;
+      line-height: 1.5;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .brand h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      background: rgba(79, 70, 229, 0.2);
+      color: #818cf8;
+      border: 1px solid rgba(79, 70, 229, 0.4);
+    }
+    .nav-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+      overflow-x: auto;
+    }
+    .nav-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .nav-btn:hover {
+      color: var(--text);
+      background: rgba(255,255,255,0.05);
+    }
+    .nav-btn.active {
+      color: #fff;
+      background: var(--primary);
+      border-color: var(--primary-hover);
+    }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .card h2 {
+      font-size: 1.15rem;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    @media(max-width: 768px) {
+      .grid-2 { grid-template-columns: 1fr; }
+    }
+    label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    input, select {
+      width: 100%;
+      background: #0f172a;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 9px 12px;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      margin-bottom: 12px;
+    }
+    input:focus, select:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+    button.btn {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      padding: 9px 16px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button.btn:hover { background: var(--primary-hover); }
+    button.btn-danger { background: var(--danger); }
+    button.btn-secondary { background: #334155; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.9rem;
+    }
+    th, td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      color: var(--text-muted);
+      font-weight: 600;
+      background: rgba(0,0,0,0.15);
+    }
+    tr:hover td {
+      background: rgba(255,255,255,0.02);
+    }
+
+    .status-tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .status-done { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+    .status-running { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+    .status-pending { background: rgba(148, 163, 184, 0.2); color: #cbd5e1; }
+    .status-failed { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+
+    .toast {
+      padding: 10px 16px;
+      border-radius: 6px;
+      margin-bottom: 16px;
+      font-size: 0.9rem;
+      display: none;
+    }
+    .toast.success { display: block; background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #10b981; }
+    .toast.error { display: block; background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid #ef4444; }
+
+    .queue-stats {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    .stat-box {
+      flex: 1;
+      background: #0f172a;
+      border: 1px solid var(--border);
+      padding: 12px;
+      border-radius: 8px;
+      text-align: center;
+    }
+    .stat-box .val {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #818cf8;
+    }
+    .stat-box .lbl {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <h1>🏆 OTT Vòng Chung Kết</h1>
+      <span class="badge">Backend Port 9000</span>
+      <span class="badge" style="background: rgba(16,185,129,0.2); color:#34d399; border-color:#10b981;">Online (PostgreSQL)</span>
+    </div>
+    <div id="user-badge" style="font-size: 0.9rem; color: var(--text-muted);">
+      Chưa đăng nhập
+    </div>
+  </header>
+
+  <div id="global-toast" class="toast"></div>
+
+  <nav class="nav-tabs">
+    <button class="nav-btn active" onclick="switchTab('standings')">📊 Bảng Xếp Hạng</button>
+    <button class="nav-btn" onclick="switchTab('matches')">⚔️ Trận Đấu & Hàng Đợi</button>
+    <button class="nav-btn" onclick="switchTab('auth')">👤 Tài Khoản Sinh Viên</button>
+    <button class="nav-btn" onclick="switchTab('admin')">⚙️ Ban Tổ Chức (Admin)</button>
+  </nav>
+
+  <!-- TAB 1: BẢNG XẾP HẠNG -->
+  <div id="tab-standings" class="tab-content active">
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h2>📊 Bảng Điểm Tích Luỹ Chung Kết</h2>
+        <button class="btn btn-secondary" onclick="loadStandings()">Làm mới</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 60px;">Hạng</th>
+            <th>Thí Sinh</th>
+            <th style="text-align:center;">Thắng</th>
+            <th style="text-align:center;">Hoà</th>
+            <th style="text-align:center;">Thua</th>
+            <th style="text-align:center;">Điểm</th>
+            <th>Cập nhật</th>
+          </tr>
+        </thead>
+        <tbody id="standings-body">
+          <tr><td colspan="7" style="text-align:center; color:var(--text-muted)">Đang tải...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TAB 2: TRẬN ĐẤU -->
+  <div id="tab-matches" class="tab-content">
+    <div class="card">
+      <div class="queue-stats">
+        <div class="stat-box">
+          <div class="val" id="queue-count">0</div>
+          <div class="lbl">Trong Hàng Đợi (Queue)</div>
+        </div>
+        <div class="stat-box">
+          <div class="val" id="workers-count">4</div>
+          <div class="lbl">Luồng Song Song (Workers)</div>
+        </div>
+        <div class="stat-box">
+          <div class="val" id="total-matches-count">0</div>
+          <div class="lbl">Tổng Trận Đấu</div>
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h2>⚔️ Danh Sách Trận Đấu Gần Đây</h2>
+        <button class="btn btn-secondary" onclick="loadMatches()">Làm mới</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Request ID</th>
+            <th>Thí Sinh A</th>
+            <th>Tỉ Số</th>
+            <th>Thí Sinh B</th>
+            <th>Trạng Thái</th>
+            <th>Người Thắng</th>
+            <th>Thời Gian</th>
+          </tr>
+        </thead>
+        <tbody id="matches-body">
+          <tr><td colspan="7" style="text-align:center; color:var(--text-muted)">Đang tải...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TAB 3: AUTH / THÍ SINH -->
+  <div id="tab-auth" class="tab-content">
+    <div class="grid-2">
+      <div class="card">
+        <h2>🔑 Đăng Nhập Sinh Viên</h2>
+        <div id="login-section">
+          <label>Tên đăng nhập (Username):</label>
+          <input type="text" id="login-user" placeholder="vd: sv_nguyenvana">
+          <label>Mật khẩu:</label>
+          <input type="password" id="login-pass" placeholder="••••••••">
+          <button class="btn" onclick="doLogin()">Đăng Nhập</button>
+        </div>
+        <div id="logged-section" style="display:none;">
+          <p style="margin-bottom: 12px; color: #34d399;">✅ Đang đăng nhập với tài khoản:</p>
+          <div style="background:#0f172a; padding:12px; border-radius:6px; margin-bottom:12px;">
+            <p><strong>Username:</strong> <span id="me-username"></span></p>
+            <p><strong>Họ Tên:</strong> <span id="me-display"></span></p>
+            <p><strong>MSSV:</strong> <span id="me-student-id"></span></p>
+          </div>
+          <button class="btn btn-danger" onclick="doLogout()">Đăng Xuất</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>ℹ️ Hướng Dẫn Dành Cho Thí Sinh</h2>
+        <ul style="padding-left: 18px; color: var(--text-muted); font-size: 0.9rem;">
+          <li style="margin-bottom: 8px;">Mỗi thí sinh được cấp một tài khoản đăng nhập trên server PostgreSQL.</li>
+          <li style="margin-bottom: 8px;">Ban tổ chức sẽ chốt file bot (latest.py) từ vòng online hoặc nộp trực tiếp tại bàn thi.</li>
+          <li style="margin-bottom: 8px;">Mỗi cặp đấu sẽ thi đấu 2 ván (BO2) luân phiên đi trước / đi sau.</li>
+          <li style="margin-bottom: 8px;">Thắng nhận 3 điểm, Hoà 1 điểm, Thua 0 điểm.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 4: BAN TỔ CHỨC (ADMIN) -->
+  <div id="tab-admin" class="tab-content">
+    <div class="card">
+      <h2>🛡️ Xác Thực Quyền BTC</h2>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <input type="password" id="admin-secret" placeholder="Nhập Secret Admin (FINALS_ADMIN_SECRET)" style="margin-bottom:0; max-width:320px;">
+        <button class="btn" onclick="saveAdminSecret()">Lưu Secret</button>
+        <span id="admin-status" style="font-size:0.85rem; color:var(--text-muted)"></span>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <!-- TẠO CẶP ĐẤU -->
+      <div class="card">
+        <h2>🚀 Đẩy Cặp Đấu Vào Hàng Đợi (Queue)</h2>
+        <label>Thí Sinh A:</label>
+        <input type="text" id="match-player-a" placeholder="Username thí sinh A">
+        <label>Thí Sinh B:</label>
+        <input type="text" id="match-player-b" placeholder="Username thí sinh B">
+        <label>Request ID (tuỳ chọn, để kiểm tra idempotent):</label>
+        <input type="text" id="match-request-id" placeholder="Tự sinh nếu để trống">
+        <button class="btn" onclick="createMatch()">Tạo Trận Đấu</button>
+      </div>
+
+      <!-- ĐĂNG KÝ THÍ SINH -->
+      <div class="card">
+        <h2>➕ Thêm Thí Sinh Mới Vào SQL</h2>
+        <label>Username:</label>
+        <input type="text" id="new-user" placeholder="vd: bot_vinh">
+        <label>Mật khẩu:</label>
+        <input type="password" id="new-pass" placeholder="Tối thiểu 6 ký tự">
+        <label>Họ và Tên:</label>
+        <input type="text" id="new-display" placeholder="Nguyễn Văn A">
+        <label>Mã Sinh Viên (MSSV):</label>
+        <input type="text" id="new-sid" placeholder="20210000">
+        <button class="btn" onclick="addContestant()">Thêm Thí Sinh</button>
+      </div>
+    </div>
+
+    <!-- DANH SÁCH THÍ SINH -->
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h2>👥 Danh Sách Thí Sinh Trong CSDL (PostgreSQL)</h2>
+        <button class="btn btn-secondary" onclick="loadContestants()">Làm mới</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Username</th>
+            <th>Họ Tên</th>
+            <th>MSSV</th>
+            <th>Ngày Tạo</th>
+            <th>Thao Tác</th>
+          </tr>
+        </thead>
+        <tbody id="contestants-body">
+          <tr><td colspan="5" style="text-align:center; color:var(--text-muted)">Nhập Admin Secret và nhấn Làm mới...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    let token = localStorage.getItem("finals_token") || "";
+    let adminSecret = localStorage.getItem("finals_admin_secret") || "btc_admin_secret_2026";
+
+    function showToast(msg, isError = false) {
+      const el = document.getElementById("global-toast");
+      el.className = "toast " + (isError ? "error" : "success");
+      el.textContent = msg;
+      setTimeout(() => { el.className = "toast"; }, 4000);
+    }
+
+    function switchTab(tab) {
+      document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
+      document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+      event.target.classList.add("active");
+      document.getElementById("tab-" + tab).classList.add("active");
+
+      if (tab === "standings") loadStandings();
+      if (tab === "matches") { loadMatches(); loadQueue(); }
+      if (tab === "auth") checkMe();
+      if (tab === "admin") {
+        document.getElementById("admin-secret").value = adminSecret;
+        loadContestants();
+      }
+    }
+
+    // --- STANDINGS ---
+    async function loadStandings() {
+      try {
+        const res = await fetch("/finals/standings");
+        const data = await res.json();
+        const tbody = document.getElementById("standings-body");
+        tbody.innerHTML = "";
+        if (!data.standings || data.standings.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted)">Chưa có dữ liệu thi đấu</td></tr>';
+          return;
+        }
+        data.standings.forEach((s, idx) => {
+          tbody.innerHTML += `
+            <tr>
+              <td><strong>#${idx + 1}</strong></td>
+              <td><strong>${s.username}</strong></td>
+              <td style="text-align:center; color:#34d399;">${s.wins}</td>
+              <td style="text-align:center; color:#cbd5e1;">${s.draws}</td>
+              <td style="text-align:center; color:#f87171;">${s.losses}</td>
+              <td style="text-align:center;"><strong style="font-size:1.1rem; color:#818cf8;">${s.points}</strong></td>
+              <td style="color:var(--text-muted); font-size:0.8rem;">${new Date(s.updated_at).toLocaleTimeString()}</td>
+            </tr>
+          `;
+        });
+      } catch (err) {
+        showToast("Lỗi tải BXH: " + err.message, true);
+      }
+    }
+
+    // --- MATCHES & QUEUE ---
+    async function loadQueue() {
+      try {
+        const res = await fetch("/finals/admin/queue", {
+          headers: { "X-Finals-Token": token, "X-Admin-Secret": adminSecret }
+        });
+        const data = await res.json();
+        if (data.ok && data.queue) {
+          document.getElementById("queue-count").textContent = data.queue.queue_size;
+          document.getElementById("workers-count").textContent = data.queue.max_workers;
+        }
+      } catch (_) {}
+    }
+
+    async function loadMatches() {
+      try {
+        const res = await fetch("/finals/matches?per_page=20", {
+          headers: { "X-Finals-Token": token }
+        });
+        const data = await res.json();
+        const tbody = document.getElementById("matches-body");
+        tbody.innerHTML = "";
+        if (!data.ok || !data.matches || data.matches.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted)">Chưa có trận đấu nào</td></tr>';
+          return;
+        }
+        document.getElementById("total-matches-count").textContent = data.total || data.matches.length;
+        data.matches.forEach(m => {
+          const score = (m.status === 'done') ? `${m.score_a} - ${m.score_b}` : '-';
+          const winner = m.winner ? `🏆 <strong>${m.winner}</strong>` : (m.status === 'done' ? 'Hoà' : '-');
+          tbody.innerHTML += `
+            <tr>
+              <td><code style="color:#94a3b8; font-size:0.8rem;">${m.request_id.substring(0, 8)}...</code></td>
+              <td><strong>${m.player_a}</strong></td>
+              <td style="font-weight:700; color:#818cf8;">${score}</td>
+              <td><strong>${m.player_b}</strong></td>
+              <td><span class="status-tag status-${m.status}">${m.status}</span></td>
+              <td>${winner}</td>
+              <td style="color:var(--text-muted); font-size:0.8rem;">${new Date(m.created_at).toLocaleTimeString()}</td>
+            </tr>
+          `;
+        });
+      } catch (err) {
+        showToast("Lỗi tải danh sách trận: " + err.message, true);
+      }
+    }
+
+    // --- AUTH ---
+    async function doLogin() {
+      const u = document.getElementById("login-user").value.trim();
+      const p = document.getElementById("login-pass").value;
+      if (!u || !p) return showToast("Vui lòng điền đủ username và mật khẩu", true);
+
+      try {
+        const res = await fetch("/finals/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: u, password: p })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          token = data.token;
+          localStorage.setItem("finals_token", token);
+          showToast("Đăng nhập thành công!");
+          checkMe();
+        } else {
+          showToast(data.error || "Đăng nhập thất bại", true);
+        }
+      } catch (err) {
+        showToast("Lỗi kết nối: " + err.message, true);
+      }
+    }
+
+    async function checkMe() {
+      if (!token) {
+        document.getElementById("login-section").style.display = "block";
+        document.getElementById("logged-section").style.display = "none";
+        document.getElementById("user-badge").textContent = "Chưa đăng nhập";
+        return;
+      }
+      try {
+        const res = await fetch("/finals/me", {
+          headers: { "X-Finals-Token": token }
+        });
+        const data = await res.json();
+        if (data.ok && data.user) {
+          document.getElementById("login-section").style.display = "none";
+          document.getElementById("logged-section").style.display = "block";
+          document.getElementById("me-username").textContent = data.user.username;
+          document.getElementById("me-display").textContent = data.user.display_name;
+          document.getElementById("me-student-id").textContent = data.user.student_id || "(chưa có)";
+          document.getElementById("user-badge").textContent = "👤 " + data.user.display_name + " (" + data.user.username + ")";
+        } else {
+          token = "";
+          localStorage.removeItem("finals_token");
+          checkMe();
+        }
+      } catch (_) {}
+    }
+
+    async function doLogout() {
+      if (token) {
+        await fetch("/finals/auth/logout", {
+          method: "POST",
+          headers: { "X-Finals-Token": token }
+        });
+      }
+      token = "";
+      localStorage.removeItem("finals_token");
+      showToast("Đã đăng xuất");
+      checkMe();
+    }
+
+    // --- ADMIN ---
+    function saveAdminSecret() {
+      adminSecret = document.getElementById("admin-secret").value.trim();
+      localStorage.setItem("finals_admin_secret", adminSecret);
+      document.getElementById("admin-status").textContent = "Đã lưu!";
+      setTimeout(() => { document.getElementById("admin-status").textContent = ""; }, 2000);
+      loadContestants();
+    }
+
+    async function createMatch() {
+      const pa = document.getElementById("match-player-a").value.trim();
+      const pb = document.getElementById("match-player-b").value.trim();
+      const rid = document.getElementById("match-request-id").value.trim() || undefined;
+
+      if (!pa || !pb) return showToast("Cần nhập cả thí sinh A và B", true);
+
+      try {
+        const res = await fetch("/finals/matches", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Finals-Token": token,
+            "X-Admin-Secret": adminSecret
+          },
+          body: JSON.stringify({ player_a: pa, player_b: pb, request_id: rid })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          showToast(`Đã đẩy trận ${pa} vs ${pb} vào Queue! (request_id: ${data.request_id})`);
+          loadMatches();
+          loadQueue();
+        } else {
+          showToast(data.error || "Không thể tạo trận", true);
+        }
+      } catch (err) {
+        showToast("Lỗi: " + err.message, true);
+      }
+    }
+
+    async function addContestant() {
+      const u = document.getElementById("new-user").value.trim();
+      const p = document.getElementById("new-pass").value;
+      const d = document.getElementById("new-display").value.trim();
+      const s = document.getElementById("new-sid").value.trim() || null;
+
+      if (!u || !p || !d) return showToast("Vui lòng điền đủ Username, Password, Họ Tên", true);
+
+      try {
+        const res = await fetch("/finals/admin/contestants", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Finals-Token": token,
+            "X-Admin-Secret": adminSecret
+          },
+          body: JSON.stringify({ username: u, password: p, display_name: d, student_id: s })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          showToast(`Đã thêm thí sinh ${u} vào PostgreSQL!`);
+          document.getElementById("new-user").value = "";
+          document.getElementById("new-pass").value = "";
+          document.getElementById("new-display").value = "";
+          document.getElementById("new-sid").value = "";
+          loadContestants();
+        } else {
+          showToast(data.error || "Lỗi thêm thí sinh", true);
+        }
+      } catch (err) {
+        showToast("Lỗi: " + err.message, true);
+      }
+    }
+
+    async function loadContestants() {
+      try {
+        const res = await fetch("/finals/admin/contestants", {
+          headers: {
+            "X-Finals-Token": token,
+            "X-Admin-Secret": adminSecret
+          }
+        });
+        const data = await res.json();
+        const tbody = document.getElementById("contestants-body");
+        tbody.innerHTML = "";
+        if (!data.ok || !data.contestants || data.contestants.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-muted)">Chưa có thí sinh nào trong CSDL</td></tr>';
+          return;
+        }
+        data.contestants.forEach(c => {
+          tbody.innerHTML += `
+            <tr>
+              <td><strong>${c.username}</strong></td>
+              <td>${c.display_name}</td>
+              <td>${c.student_id || '-'}</td>
+              <td style="color:var(--text-muted); font-size:0.8rem;">${new Date(c.created_at).toLocaleDateString()}</td>
+              <td>
+                <button class="btn btn-secondary" style="padding:4px 8px; font-size:0.75rem;" onclick="snapshotBot('${c.username}')">Chốt Bot</button>
+              </td>
+            </tr>
+          `;
+        });
+      } catch (err) {
+        showToast("Lỗi tải thí sinh: " + err.message, true);
+      }
+    }
+
+    async function snapshotBot(username) {
+      try {
+        const res = await fetch("/finals/admin/bots/snapshot", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Finals-Token": token,
+            "X-Admin-Secret": adminSecret
+          },
+          body: JSON.stringify({ username })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          showToast(`Đã chốt bot cho ${username} thành công!`);
+        } else {
+          showToast(data.error || "Lỗi chốt bot", true);
+        }
+      } catch (err) {
+        showToast("Lỗi: " + err.message, true);
+      }
+    }
+
+    // Khởi chạy khi load trang
+    loadStandings();
+    checkMe();
+  </script>
+</body>
+</html>

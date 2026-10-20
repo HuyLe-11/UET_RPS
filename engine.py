@@ -102,10 +102,18 @@ class ProcBot:
             env = {}
 
             def limits():
-                resource.setrlimit(resource.RLIMIT_AS, (512 << 20, 512 << 20))
-                resource.setrlimit(resource.RLIMIT_CPU, (30, 30))
-                resource.setrlimit(resource.RLIMIT_FSIZE, (0, 0))
-                resource.setrlimit(resource.RLIMIT_NPROC, (0, 0))
+                for attr, val in [
+                    ("RLIMIT_AS", (512 << 20, 512 << 20)),
+                    ("RLIMIT_CPU", (30, 30)),
+                    ("RLIMIT_FSIZE", (0, 0)),
+                    ("RLIMIT_NPROC", (0, 0)),
+                ]:
+                    try:
+                        lim = getattr(resource, attr, None)
+                        if lim is not None:
+                            resource.setrlimit(lim, val)
+                    except Exception:
+                        pass
             kw["preexec_fn"] = limits
             kw["start_new_session"] = True
         self.p = subprocess.Popen([sys.executable, "-I", os.path.abspath(path)], stdin=subprocess.PIPE,
