@@ -1,6 +1,6 @@
 # Kế hoạch migrate hệ thống chấm bài
 
-Tài liệu này là handoff cho AI/engineer tiếp tục công việc. Migration đang thực hiện theo từng pha; các migration SQL mới trong repo chưa được áp dụng lên Supabase đang chạy và hệ thống chưa đủ điều kiện production.
+Tài liệu này là handoff cho AI/engineer tiếp tục công việc. **Trạng thái mới nhất nằm ở mục “Cập nhật vận hành giải online (2026-10-21)” cuối tài liệu; phần khảo sát/checklist trước đó là lịch sử và có nội dung đã lỗi thời.** Chủ dự án xác nhận đã áp dụng `0004`; cần áp dụng `0005` và `0006` trước khi chạy giải mới.
 
 ## Mục tiêu đã thống nhất
 
@@ -103,10 +103,17 @@ Tài liệu này là handoff cho AI/engineer tiếp tục công việc. Migratio
 - [x] Thêm `get_my_dashboard()` RPC gộp trạng thái, bảng xếp hạng, nhà vô địch và tiến độ thành một roundtrip.
 - [x] Giảm polling job fallback từ 2 giây xuống 12 giây; Supabase Realtime là đường cập nhật chính.
 - [x] Thêm migration `0004_replay_storage_and_web_api.sql`: bucket private 16 MiB/object, bảng metadata/hash, RLS đọc theo chủ job/thành viên bảng/admin, RPC metadata.
+- [x] Chủ dự án xác nhận đã áp dụng `0004` lên Supabase và thử replay thành công.
+- [x] Thêm migration `0005_admin_monitoring_and_round_submissions.sql`: URL máy chấm chính thức, RPC dashboard giám sát admin, cấu hình giai đoạn/vòng và ghi metadata submission khi job hoàn tất.
+- [x] Nối URL do thí sinh nhập vào health check và `POST /v1/jobs/{id}`; URL admin lưu chính thức trên Supabase và được dùng làm mặc định. Cần CORS allowlist trên module cho domain Vercel.
+- [x] Thay admin dashboard thành các khu vực giải đấu, máy chấm, quan sát và giám sát; ẩn navigation và luồng submit thí sinh khỏi role admin. Module metrics đọc trạng thái Judge0/worker.
+- [x] Kiểm tra build frontend bằng `npm run build` (TypeScript + Vite thành công; còn cảnh báo bundle JS >500 KB).
 - [x] Module upload replay gzip lên Storage; frontend ký URL 120 giây và tải nội dung trực tiếp từ Supabase.
-- [ ] Chưa áp dụng migration `0004` lên Supabase; phải chạy các migration `0001`–`0004` đúng thứ tự trước khi thử flow mới.
+- [ ] Chạy `0005_admin_monitoring_and_round_submissions.sql` trên Supabase trước khi dùng URL chính thức và admin dashboard mới.
 - [ ] Replay trận lịch sử chưa tự chuyển từ `ott.db`/`data/storage/replays`; RPC chỉ liệt kê replay có metadata `replay_objects`.
 - [ ] SQLite vẫn được dùng bởi `tournament.py`, `data/sync.py`, `data/manage.py`, các batch/script legacy và tool/test cũ. `grade_day`, ghép cặp, advancement, offline/live scoring chưa được chuyển; vì vậy chưa thể xóa `ott.db` hoặc tuyên bố toàn bộ migration hoàn tất.
+- [ ] Migration `0005` chưa được chạy/kiểm tra trên Supabase trong lần cập nhật này; cần áp dụng trước khi deploy UI admin mới. Admin RPC mới hiển thị tối đa 200 job, 1000 thí sinh, 200 trận và 500 kết quả gần nhất.
+- [ ] Admin có thể cấu hình phase/context và quan sát; nút đóng ngày, tạo Swiss pairing, chạy grading, tính advancement/champion chưa được triển khai. Không dùng v0 để vận hành các vòng cần các thao tác này.
 - [ ] Nếu replay upload fail, job chấm vẫn hoàn thành nhưng chưa có replay. Cần thêm retry/reconciliation và metric upload-failed trước production.
 - [ ] Hạn chế file replay hiện là 16 MiB; cần đo kích thước thực tế và dung lượng/bandwidth Supabase trước khi demo nhiều trận.
 
@@ -136,6 +143,26 @@ Tài liệu này là handoff cho AI/engineer tiếp tục công việc. Migratio
 - [x] Thêm migration `0003_immediate_scoring_and_admin_phases.sql`: chấm mỗi lần gửi, cap 20 lượt vòng loại, giữ điểm tốt nhất, admin đặt phase và theo dõi scoring jobs.
 - [ ] Gỡ SQLite khỏi luồng chấm và hoàn tất migration dữ liệu.
 
+## Cập nhật vận hành giải online (2026-10-21)
+
+Phần checklist lịch sử phía trên phản ánh trạng thái trước khi có migration 0006. Trạng thái hiện tại:
+
+- Đã viết luật đầy đủ tại `docs/TOURNAMENT_OPERATIONS.md`, bao gồm giới hạn 4.000, vòng đầu vào/40 bảng, 7 lượt Swiss, vắng mặt `-1`, bye `0`, điều kiện 4/6, top/vé vớt, công bố trễ và phạm vi online.
+- Đã tạo `data/supabase/migrations/0006_online_tournament_operations.sql`: RPC tạo cặp, xử lý bye, ghi kết quả trận, tính bảng từng ngày, xét vé vớt và chuyển vòng; thêm bảng tạm dành admin.
+- Scoring module chạy cặp song song có giới hạn (`OTT_TOURNAMENT_MATCH_WORKERS`, mặc định 4), tự khởi động lại xử lý ngày hiện hành, hỗ trợ admin đóng/mở/resume ngày và tải replay lên Supabase Storage.
+- `tournament.py` chỉ còn CLI đọc trạng thái Supabase. Đường đồng bộ SQLite `data/sync.py` đã được archive khỏi đường chạy; tạo tài khoản trong `data/auth_service.py` không còn đồng bộ vào SQLite. Snapshot mã cũ ở `backup/legacy_sqlite/`.
+- Admin có thể xuất bảng tạm hiện tại thành CSV; dữ liệu này chỉ dành admin. Thí sinh chỉ nhận BXH theo RPC công bố sau thời điểm `publish_after`.
+- **Việc còn bắt buộc trước khi vận hành:** áp dụng 0005 và 0006 lên Supabase theo thứ tự, kiểm tra dữ liệu/schema hiện hữu và chạy một giải thử trên project riêng. Workspace không có kết nối DB để thực thi migration thật. Vòng 5 offline không nằm trong phạm vi và không được tự động tạo.
+
+Những file cũ trong phần checklist phía trên được giữ làm lịch sử; khi triển khai vận hành mới, ưu tiên tài liệu này cùng `docs/TOURNAMENT_OPERATIONS.md`.
+
+## Lịch sử nộp bài và replay (2026-10-21)
+
+- Tab `/submission` có lịch sử 50 job gần nhất của người đang đăng nhập (entry và submission), cập nhật khi job đổi trạng thái và làm mới dự phòng mỗi 30 giây.
+- Mở một lượt vòng loại để xem điểm, điểm ba bot đối chứng và kết quả từng ván; nút yêu cầu replay tải JSON nén từ private Storage rồi phát trên bàn cờ.
+- Mở một lượt thi đấu để xem replay của các trận có bot đó sau khi kết quả ngày được công bố. Trước thời điểm công bố, giao diện không hiển thị kết quả/replay trận.
+- Migration `0007_submission_history_and_replay_visibility.sql` siết Storage policy và RPC replay theo `publish_after`; cần áp dụng sau `0006` trên Supabase.
+
 ### Judge0 design notes (đã chốt execution interface)
 
 - Judge0 HTTP API nhận một chương trình, stdin cố định và chạy tới khi process kết thúc; tài liệu không mô tả kênh gửi stdin tương tác thêm trong lúc chạy ([Create a Submission](https://github.com/judge0/judge0/blob/master/docs/api/submissions/create_a_submission.md), [Submissions API](https://github.com/judge0/judge0/blob/master/docs/api/submissions/submissions.md)). Engine OTT hiện yêu cầu một bot process tương tác nhiều lượt qua stdin/stdout.
@@ -150,9 +177,10 @@ Tài liệu này là handoff cho AI/engineer tiếp tục công việc. Migratio
 - `data/supabase/migrations/0002_scoring_jobs.sql` mới tạo; phải review/apply lên Supabase project trước khi frontend submit mới hoạt động.
 - `servers/scoring/module.py` chỉ bind `127.0.0.1:8110` và dùng `backend.supabase_client`/service role. Bảo mật service-role key trong máy module.
 - `servers/scoring/judge0_runner.py` chạy `choose_move(state)`/`choose_best_move(state)` trong một Judge0 Python submission cho BO2, spawn candidate subprocess giữ sống theo ván; child process trong isolate chưa được xác minh. Migration 0003 chuyển upload sang chấm ngay, giới hạn 20 lượt phase entry và giữ điểm cao nhất. Flow giải đấu theo ngày/grade_day vẫn chưa được chuyển.
-- `frontend/src/App.tsx` / `api.ts` đã đổi submit sang RPC + module song song, và đang poll Supabase job. Cần set `VITE_SCORING_MODULE_URL` ở Vercel, `OTT_SCORING_CORS_ORIGINS` trong module và hostname `score.example.com` qua Tunnel.
+- `frontend/src/App.tsx` / `api.ts` submit qua URL thí sinh nhập (hoặc URL admin cấu hình làm mặc định), kiểm tra `/v1/health`, tạo job Supabase và gửi file tới module. Cần HTTPS public URL, CORS allowlist `OTT_SCORING_CORS_ORIGINS` trong module và Cloudflare Tunnel. Không còn bắt buộc `VITE_SCORING_MODULE_URL` nếu URL được lưu trong Supabase/nhập trên form.
 - Replay UI đọc metadata từ `get_my_replay_matches`, ký URL qua Supabase Storage SDK và tải gzip trực tiếp; replay job mới chỉ xuất hiện sau khi `0004` được apply.
 - Source bot vẫn được lưu local theo job ID để module chuyển tiếp Judge0; không được dùng thư mục source làm replay/cache web.
 - `.gitignore` trước đây bỏ qua toàn bộ `servers/`; đã thêm ngoại lệ hẹp cho source/config cần thiết.
 - `judge0.conf` vẫn bị ignore vì chứa credentials local. Các giới hạn cần thiết được ghi trong `data/CLOUDFLARE_TUNNEL.md`; chỉ commit Compose, không commit `judge0.conf`.
-- Chưa chạy test/build. Không coi trạng thái code hiện tại là deploy-ready: chấm giải ngày, admin, live/offline và các đường SQLite chưa migrate.
+- Build frontend đã chạy thành công sau thay đổi admin/URL. Chưa xác nhận SQL `0005` đã chạy và chưa xác minh deploy thực tế.
+- Chưa deploy-ready cho giải đấu đầy đủ: chấm giải ngày, close, ghép cặp, live/offline scoring, advancement và các đường SQLite còn lại chưa migrate. Có thể deploy để demo luồng auth, entry scoring, replay đã chuyển và quan sát cơ bản sau khi áp dụng `0005` và cấu hình env/CORS/tunnel.

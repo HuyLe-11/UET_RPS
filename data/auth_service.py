@@ -1,7 +1,7 @@
 """Đăng ký / đăng nhập / đăng xuất bằng Supabase Auth.
 
 Thí sinh dùng username + mật khẩu; backend ánh xạ username -> email giả `<username>@OTT_EMAIL_DOMAIN`.
-Mọi tài khoản đều có 1 dòng `users` trong ott.db (SQLite) để engine chấm điểm dùng chung khóa tên.
+Hồ sơ tài khoản được quản lý trực tiếp trong Supabase; không đồng bộ sang SQLite.
 
 Flask blueprint `auth_bp` (gắn vào server.py):
   POST /auth/register {"username","password"} -> {"ok",username,"legacy_token"}
@@ -59,34 +59,22 @@ def log_event(event, user_id=None, username=None, ip=None, ua=None):
         pass
 
 
-def _ensure_local_user(username):
-    """Tạo dòng users trong ott.db nếu chưa có; trả token cũ (legacy) nếu vừa tạo."""
-    import tournament as T
-    if T.q("select 1 from users where name=?", (username,)):
-        return None
-    return T.register(username)
-
-
-ensure_local_user = _ensure_local_user
-
-
 def create_account(username, password, admin=False, ip=None, ua=None):
-    """Tạo user Supabase + user local. Rollback Supabase nếu bước local lỗi."""
+    """Create the account in Supabase Auth; profile trigger owns the profile row."""
     validate_credentials(username, password)
     created = sb().admin_create_user(username_to_email(username), password, username)
     uid = created["id"]
     try:
-        legacy = _ensure_local_user(username)
         if admin:
             sb().update("profiles", {"id": f"eq.{uid}"}, {"role": "admin"})
     except Exception:
         try:
             sb().admin_delete_user(uid)
         except Exception:
-            pass                                            # giữ nguyên lỗi gốc
+            pass
         raise
     log_event("register", uid, username, ip, ua)
-    return {"id": uid, "username": username, "legacy_token": legacy}
+    return {"id": uid, "username": username, "legacy_token": None}
 
 
 # ---------------- Giới hạn thử mật khẩu sai (trong bộ nhớ, 1 worker) ----------------

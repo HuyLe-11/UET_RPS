@@ -36,8 +36,9 @@ DIRS = [(dx, dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1) if dx or dy]
 MAX_PLIES = 200
 CONTESTANT = base64.b64decode("__CONTESTANT__")
 BENCHMARK = base64.b64decode("__BENCHMARK__")
-BOT_DRIVER = r'''import base64, contextlib, io, json, sys
+BOT_DRIVER = r'''import base64, contextlib, io, json, random, sys
 ns = {"__name__": "ott_contestant"}
+random.seed(0)
 code = base64.b64decode("__BOT_CODE__")
 with contextlib.redirect_stdout(io.StringIO()):
     exec(compile(code, "contestant.py", "exec"), ns, ns)
@@ -223,6 +224,18 @@ def default_bot_language(base_url=None):
     if language is None:
         raise Judge0Error("judge0_language_unavailable", f"Default Python language id {language_id} is not active in Judge0")
     return language
+
+
+def judge0_status(base_url=None):
+    """Return non-secret Judge0 capacity limits for the admin monitor."""
+    url = (base_url or os.environ.get("OTT_JUDGE0_URL", "http://127.0.0.1:2358")).rstrip("/")
+    config = _judge0_request(url, "/config_info")
+    return {
+        "max_cpu_time_limit": config.get("max_cpu_time_limit"),
+        "max_wall_time_limit": config.get("max_wall_time_limit"),
+        "max_memory_limit": config.get("max_memory_limit"),
+        "max_processes_and_or_threads": config.get("max_processes_and_or_threads"),
+    }
 
 
 def run_match(contestant: bytes, benchmark: bytes, base_url=None, language_id=None):

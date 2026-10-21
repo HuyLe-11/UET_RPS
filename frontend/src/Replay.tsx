@@ -82,6 +82,10 @@ export default function Replay({ data, onDay }: { data: Replays; onDay: (round: 
           : !game ? <div className="empty-state"><Play/><h3>Trận đấu sẽ xuất hiện tại đây</h3><p>{match ? 'Trận này không có dữ liệu phát lại.' : 'Sau khi ban tổ chức chấm, bạn có thể xem lại các trận trong bảng của mình.'}</p></div>
             : <>
               <div className="replay-names"><span>🔵 {botName(game.players[0])}</span><span>🔴 {botName(game.players[1])}</span></div>
+              <div className="replay-game-analysis">
+                <span>{game.result !== undefined ? (game.result > 0 ? `Thắng: ${match?.a}` : game.result < 0 ? `Thắng: ${match?.b}` : 'Ván hòa') : 'Chưa có kết quả ván'}</span>
+                <span>{total} nước đi{game.fault ? ' · có nước đi lỗi' : ' · không ghi nhận nước đi lỗi'}</span>
+              </div>
               <div className="replay-board" role="grid" aria-label="Bàn cờ phát lại 9 nhân 9">
                 {Array.from({ length: 81 }, (_, index) => {
                   const x = index % 9, y = 8 - Math.floor(index / 9), piece = pieces.get(`${x},${y}`);

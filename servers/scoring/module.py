@@ -35,7 +35,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from backend.supabase_client import get_supabase
-from .judge0_runner import Judge0Error, default_bot_language, run_match
+from .judge0_runner import Judge0Error, default_bot_language, judge0_status, run_match
 
 logger = logging.getLogger("ott.scoring")
 if not logger.handlers:
@@ -49,10 +49,18 @@ BENCHMARK_PATH = Path(os.environ.get("OTT_BENCHMARK_BOT", ROOT / "sample_bots" /
 BOT_STORE = Path(os.environ.get("OTT_SCORING_BOT_DIR", ROOT / "data" / "storage" / "submissions"))
 MAX_SOURCE_BYTES = 65536
 JOB_ID_RE = re.compile(r"^[0-9a-fA-F-]{36}$")
-_workers = ThreadPoolExecutor(max_workers=max(1, int(os.environ.get("OTT_SCORING_WORKERS", "2"))))
-_capacity = threading.BoundedSemaphore(max(1, int(os.environ.get("OTT_SCORING_QUEUE_SIZE", "20"))))
+WORKER_COUNT = max(1, int(os.environ.get("OTT_SCORING_WORKERS", "2")))
+QUEUE_CAPACITY = max(1, int(os.environ.get("OTT_SCORING_QUEUE_SIZE", "20")))
+_workers = ThreadPoolExecutor(max_workers=WORKER_COUNT)
+_tournament_workers = ThreadPoolExecutor(max_workers=max(1, int(os.environ.get("OTT_TOURNAMENT_WORKERS", "4"))))
+_match_workers = ThreadPoolExecutor(max_workers=max(1, int(os.environ.get("OTT_TOURNAMENT_MATCH_WORKERS", "4"))))
+_capacity = threading.BoundedSemaphore(QUEUE_CAPACITY)
 _dedupe_lock = threading.Lock()
 _inflight = set()
+_tournament_lock = threading.Lock()
+_tournament_days = set()
+_tournament_reschedule = set()
+_started_at = time.time()
 
 app = FastAPI(title="OTT Scoring Module", version="1.0.0")
 origins = [x.strip() for x in os.environ.get("OTT_SCORING_CORS_ORIGINS", "").split(",") if x.strip()]
@@ -219,15 +227,31 @@ def _run_job(job_id, source_path, job):
     try:
         logger.info("Starting scoring job %s (kind=%s)", job_id, job.get("kind"))
         _rpc("mark_scoring_job_running", {"p_job_id": job_id})
+        if job.get("kind") == "submission":
+            result = {"ok": True, "submitted": True, "job_id": job_id}
+            _rpc("complete_scoring_job", {"p_job_id": job_id, "p_result": result})
+            logger.info("Submission %s is ready for its scheduled match", job_id)
+            if job.get("rnd") and job.get("day"):
+                _schedule_tournament_day(int(job["rnd"]), int(job["day"]))
+            return
         started = time.monotonic()
         logger.info("Job %s uses Judge0 language id %s", job_id, job.get("language_id"))
-        match = run_match(source_path.read_bytes(), BENCHMARK_PATH.read_bytes(), language_id=job.get("language_id"))
-        evaluation = _evaluate_result(match, match.get("duration_seconds") or (time.monotonic() - started))
+        source = source_path.read_bytes()
+        if job.get("kind") == "entry":
+            weights = (1, 2, 3)
+            benchmark_paths = [ROOT / "sample_bots" / f"entry_bot{index}.py" for index in range(3)]
+            matches = [run_match(source, path.read_bytes(), language_id=job.get("language_id")) for path in benchmark_paths]
+            evaluation = _evaluate_entry(matches, weights, time.monotonic() - started)
+            games = [game for match in matches for game in match["games"]]
+        else:
+            match = run_match(source, BENCHMARK_PATH.read_bytes(), language_id=job.get("language_id"))
+            evaluation = _evaluate_result(match, match.get("duration_seconds") or (time.monotonic() - started))
+            games = match["games"]
         evaluation["judge0_language_id"] = job.get("language_id")
         # Replays are immutable compressed objects in a private Supabase bucket.
         # Upload failure is logged but does not discard a successfully computed score.
         try:
-            _store_job_replay(job_id, match["games"])
+            _store_job_replay(job_id, games)
         except Exception:
             logger.exception("Could not upload replay for scoring job %s", job_id)
         _rpc("complete_scoring_job", {"p_job_id": job_id, "p_result": evaluation})
@@ -250,6 +274,30 @@ def _run_job(job_id, source_path, job):
         _capacity.release()
 
 
+def _evaluate_entry(matches, weights, duration):
+    scores = [int(match.get("match_score", 0)) for match in matches]
+    qualification_score = sum(weight * score for weight, score in zip(weights, scores))
+    return {
+        "ok": True,
+        "qualification_score": qualification_score,
+        "converted_score": qualification_score,
+        "benchmark_scores": scores,
+        "entry_weights": list(weights),
+        "passed": qualification_score >= -2,
+        "status_badge": "ĐẠT VÒNG LOẠI" if qualification_score >= -2 else "BỊ LOẠI",
+        "duration_seconds": round(duration, 2),
+        "criteria": {
+            "qualification": {
+                "name": "Điểm đầu vào có trọng số",
+                "score": f"{qualification_score}/12",
+                "status": "PASS" if qualification_score >= -2 else "FAIL",
+                "breakdown": scores,
+            }
+        },
+        "games": [game for match in matches for game in match.get("games", [])],
+    }
+
+
 def _store_job_replay(job_id, games):
     raw = json.dumps(games, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     compressed = gzip.compress(raw, compresslevel=6, mtime=0)
@@ -269,10 +317,221 @@ def _store_job_replay(job_id, games):
         sb.insert("replay_objects", [metadata])
 
 
+def _store_match_replay(match_id, games):
+    raw = json.dumps(games, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    compressed = gzip.compress(raw, compresslevel=6, mtime=0)
+    path = f"matches/{match_id}.json.gz"
+    sb = get_supabase()
+    sb.upload_storage_object("replays", path, compressed, "application/gzip")
+    metadata = {
+        "match_id": match_id,
+        "storage_path": path,
+        "content_type": "application/gzip",
+        "size_bytes": len(compressed),
+        "sha256": hashlib.sha256(compressed).hexdigest(),
+        "state": "ready",
+    }
+    updated = sb.update("replay_objects", {"match_id": f"eq.{match_id}"}, metadata)
+    if not updated:
+        sb.insert("replay_objects", [metadata])
+    sb.update("matches", {"id": f"eq.{match_id}"}, {"has_replay": True})
+
+
+def _match_source(job_id):
+    if not job_id:
+        return None
+    path = _local_result_path(str(job_id))
+    if not path.is_file():
+        raise RuntimeError(f"Missing local bot source for completed submission job {job_id}")
+    return path.read_bytes()
+
+
+def _process_tournament_day(round_number, day_number):
+    sb = get_supabase()
+    day_rows = sb.select("contest_days", {
+        "rnd": f"eq.{round_number}", "day": f"eq.{day_number}",
+        "select": "state", "limit": "1",
+    })
+    if not day_rows or day_rows[0]["state"] not in ("open", "grading"):
+        return
+    day_state = day_rows[0]["state"]
+    for rd in range(1, 8):
+        matches = _rpc("prepare_swiss_round", {"p_rnd": round_number, "p_day": day_number, "p_rd": rd}) or []
+        pending = [row for row in matches if row.get("match_state") in ("pending", "running")]
+        def process_match(row):
+            source_a = _match_source(row.get("job_a")) if row.get("job_a") else None
+            source_b = _match_source(row.get("job_b")) if row.get("job_b") else None
+            ready_a, ready_b = source_a is not None, source_b is not None
+            if not (ready_a and ready_b) and day_state != "grading":
+                return
+            if ready_a and ready_b:
+                if not _rpc("mark_tournament_match_running", {"p_match_id": row["match_id"]}):
+                    return
+                result = run_match(source_a, source_b)
+                _rpc("record_tournament_match", {
+                    "p_match_id": row["match_id"], "p_score_a": result["match_score"],
+                    "p_a_ready": True, "p_b_ready": True,
+                })
+                try:
+                    _store_match_replay(row["match_id"], result["games"])
+                except Exception:
+                    logger.exception("Could not upload replay for tournament match %s", row["match_id"])
+            else:
+                _rpc("record_tournament_match", {
+                    "p_match_id": row["match_id"], "p_score_a": 0,
+                    "p_a_ready": ready_a, "p_b_ready": ready_b,
+                })
+
+        # Keep the Judge0 load bounded while allowing independent pairs to run concurrently.
+        futures = [_match_workers.submit(process_match, row) for row in pending]
+        for future in futures:
+            future.result()
+        refreshed = _rpc("prepare_swiss_round", {"p_rnd": round_number, "p_day": day_number, "p_rd": rd}) or []
+        unresolved = [row for row in refreshed if row.get("match_state") not in ("completed", "forfeit")]
+        if unresolved and day_state != "grading":
+            return
+        if unresolved:
+            # A worker may have died while a match was marked running. Its DB lease
+            # expires after two minutes; retry once that claim can be recovered.
+            retry = threading.Timer(125, _schedule_tournament_day, args=(round_number, day_number))
+            retry.daemon = True
+            retry.start()
+            return
+    # Final rankings and advancement are committed in one Supabase transaction after the day is closed.
+    if day_state == "grading":
+        result = _rpc("finalize_tournament_day", {"p_rnd": round_number, "p_day": day_number})
+        logger.info("Tournament day r%s/d%s finalized: %s", round_number, day_number, result)
+        next_round = result.get("next_round") if isinstance(result, dict) else None
+        if next_round:
+            _schedule_tournament_day(int(next_round), 1)
+
+
+def _schedule_tournament_day(round_number, day_number):
+    key = (round_number, day_number)
+    with _tournament_lock:
+        if key in _tournament_days:
+            _tournament_reschedule.add(key)
+            return
+        _tournament_days.add(key)
+
+    def run():
+        try:
+            logger.info("Processing Supabase tournament day r%s/d%s", round_number, day_number)
+            _process_tournament_day(round_number, day_number)
+        except Exception:
+            logger.exception("Tournament day processing failed for r%s/d%s", round_number, day_number)
+        finally:
+            rerun = False
+            with _tournament_lock:
+                _tournament_days.discard(key)
+                if key in _tournament_reschedule:
+                    _tournament_reschedule.discard(key)
+                    rerun = True
+            if rerun:
+                _schedule_tournament_day(round_number, day_number)
+
+    _tournament_workers.submit(run)
+
+
+@app.on_event("startup")
+def resume_tournament_work_after_restart():
+    try:
+        rows = get_supabase().select("tournament_state", {
+            "id": "eq.1", "select": "phase,current_round,current_day", "limit": "1",
+        })
+        if rows and rows[0].get("phase") == "round":
+            _schedule_tournament_day(int(rows[0]["current_round"]), int(rows[0]["current_day"]))
+    except Exception:
+        logger.exception("Could not resume tournament work during startup")
+
+
 @app.get("/health")
 @app.get("/v1/health")
 async def health():
     return {"ok": True, "service": "ott-scoring-module"}
+
+
+@app.get("/v1/admin/metrics")
+async def admin_metrics(authorization: str | None = Header(None)):
+    token = _token(authorization)
+    user = _user(token)
+    profiles = get_supabase().select("profiles", {"id": f"eq.{user.get('id')}", "select": "role", "limit": "1"})
+    if not profiles or profiles[0].get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Chỉ admin được xem metrics")
+    with _dedupe_lock:
+        active = len(_inflight)
+    try:
+        judge0 = {"status": "online", **judge0_status()}
+    except Exception as exc:
+        logger.warning("Admin metrics could not reach Judge0 (%s)", type(exc).__name__)
+        judge0 = {"status": "offline"}
+    return {
+        "status": "online",
+        "uptime_seconds": max(0, int(time.time() - _started_at)),
+        "workers": WORKER_COUNT,
+        "active_jobs": active,
+        "job_capacity": QUEUE_CAPACITY,
+        "available_slots": _capacity._value,
+        "judge0": judge0,
+    }
+
+
+def _require_scoring_admin(authorization):
+    token = _token(authorization)
+    user = _user(token)
+    profiles = get_supabase().select("profiles", {"id": f"eq.{user.get('id')}", "select": "role", "limit": "1"})
+    if not profiles or profiles[0].get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Chỉ admin được điều hành giải đấu")
+    return user
+
+
+@app.post("/v1/admin/tournament/close-entry")
+async def close_qualification(authorization: str | None = Header(None)):
+    _require_scoring_admin(authorization)
+    try:
+        result = _rpc("admin_close_qualification", {})
+        _schedule_tournament_day(1, 1)
+        return {"ok": True, "result": result}
+    except Exception as exc:
+        logger.exception("Could not close tournament qualification")
+        raise HTTPException(status_code=409, detail=str(exc)[:300]) from None
+
+
+@app.post("/v1/admin/tournament/open-day")
+async def open_tournament_day(payload: dict, authorization: str | None = Header(None)):
+    _require_scoring_admin(authorization)
+    try:
+        round_number, day_number = int(payload["round"]), int(payload["day"])
+        _rpc("admin_open_tournament_day", {"p_rnd": round_number, "p_day": day_number})
+        _schedule_tournament_day(round_number, day_number)
+        return {"ok": True, "round": round_number, "day": day_number}
+    except Exception as exc:
+        logger.exception("Could not open tournament day")
+        raise HTTPException(status_code=409, detail=str(exc)[:300]) from None
+
+
+@app.post("/v1/admin/tournament/close-day")
+async def close_tournament_day(authorization: str | None = Header(None)):
+    _require_scoring_admin(authorization)
+    try:
+        result = _rpc("admin_close_tournament_day", {})
+        _schedule_tournament_day(int(result["round"]), int(result["day"]))
+        return {"ok": True, "result": result}
+    except Exception as exc:
+        logger.exception("Could not close tournament day")
+        raise HTTPException(status_code=409, detail=str(exc)[:300]) from None
+
+
+@app.post("/v1/admin/tournament/resume-day")
+async def resume_tournament_day(payload: dict, authorization: str | None = Header(None)):
+    _require_scoring_admin(authorization)
+    try:
+        round_number, day_number = int(payload["round"]), int(payload["day"])
+        _schedule_tournament_day(round_number, day_number)
+        return {"ok": True, "round": round_number, "day": day_number}
+    except Exception as exc:
+        logger.exception("Could not resume tournament day")
+        raise HTTPException(status_code=409, detail=str(exc)[:300]) from None
 
 
 @app.get("/v1/languages")

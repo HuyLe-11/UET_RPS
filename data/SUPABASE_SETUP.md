@@ -1,6 +1,6 @@
 # Cấu hình Supabase
 
-> **Trạng thái v0 (2026-10-21):** phần hướng dẫn đồng bộ SQLite ở các mục dưới là luồng giải đấu cũ. Với demo hiện tại, chạy lần lượt toàn bộ migration `0001`–`0004`; dashboard và replay mới dùng Supabase trực tiếp, còn module chấm cần service role để ghi job/replay. Quy trình chuyển `grade_day` và lịch sử SQLite chưa hoàn tất; xem `../SCORING_MIGRATION_HANDOFF.md`.
+> **Trạng thái:** migration `0004` đã được áp dụng và replay đã chạy thử. Trước khi vận hành giải online và mở replay theo lịch sử, hãy chạy `0005`–`0007` theo đúng thứ tự. SQL mới được tạo trong workspace, chưa được áp dụng vào project Supabase từ phiên làm việc này.
 
 ## 1. Tạo project
 1. Vào https://supabase.com → **New project** (chọn region gần VN: Singapore).
@@ -8,7 +8,7 @@
 
 ## 2. Chạy schema
 **Dashboard → SQL Editor → New query**, chạy tuần tự từng migration:
-`0001_schema.sql` → `0002_scoring_jobs.sql` → `0003_immediate_scoring_and_admin_phases.sql` → `0004_replay_storage_and_web_api.sql`.
+`0001_schema.sql` → `0002_scoring_jobs.sql` → `0003_immediate_scoring_and_admin_phases.sql` → `0004_replay_storage_and_web_api.sql` → `0005_admin_monitoring_and_round_submissions.sql` → `0006_online_tournament_operations.sql` → `0007_submission_history_and_replay_visibility.sql`.
 Không chạy `0004` trước các migration tạo `matches` và `scoring_jobs`.
 
 ## 3. Cấu hình Auth
@@ -42,14 +42,9 @@ cp data/.env.example data/.env      # rồi điền 3 khóa trên
 .venv/bin/python -m backend.manage create-admin btc@example.com btc_admin 'MatKhauManh123'
 ```
 
-## 6. Đồng bộ dữ liệu giải đấu legacy
+## 6. Lưu ý dữ liệu legacy
 
-Các lệnh dưới đây vẫn thao tác SQLite `ott.db`; chỉ dùng để đối soát/chuyển dữ liệu cũ, không dùng làm backend demo v0. Không chạy đồng thời với luồng Supabase mới.
-```bash
-export OTT_SUPABASE_SYNC=1        # tự sync sau entry-close / close / grade (cả CLI và /admin)
-.venv/bin/python -m data.sync     # hoặc sync tay bất kỳ lúc nào (idempotent)
-```
-Thứ tự đề xuất: tạo tài khoản thí sinh → thi đầu vào → `entry-close` (sync tự chạy) → mỗi ngày `close` rồi `grade`.
+Luồng vận hành mới không đọc/ghi SQLite. `tournament.py status` chỉ đọc Supabase; `data/sync.py` đã được archive tại `backup/legacy_sqlite/`. Nếu còn cần chuyển dữ liệu cũ, thực hiện trên bản sao riêng và đối soát trước khi import; không chạy đồng thời tool SQLite cũ với giải Supabase.
 
 ## 7. Dùng từ frontend (supabase-js)
 Frontend có thể gọi trực tiếp Supabase bằng anon key + JWT của thí sinh:
@@ -65,3 +60,13 @@ Frontend hiện gọi RPC/Storage với anon key + JWT. FastAPI Render chỉ gi�
 - [ ] Đã tắt public sign-up.
 - [ ] RLS bật (script đã bật); thử đăng nhập 1 thí sinh và `select * from daily_results` chỉ thấy dòng của mình.
 - [ ] Bật **Point-in-Time Recovery** / backup trước ngày thi (Pro) hoặc `pg_dump` định kỳ.
+
+## 9. Biến môi trường khi deploy demo
+
+- **Vercel** (Root Directory `frontend`, Build `npm run build`, Output `dist`): đặt `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_API_URL=https://<backend-render>.onrender.com`. `VITE_SCORING_MODULE_URL` là tùy chọn; nếu bỏ trống, thí sinh nhập URL máy chấm hoặc nhận URL mặc định đã lưu trong admin.
+- **Render** (repository root, Python): Build `pip install -r requirements.txt`; Start `uvicorn backend.main:app --host 0.0.0.0 --port $PORT`. Khai báo `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `OTT_CORS_ORIGINS=https://<domain-vercel>`.
+- **Máy chấm tại chỗ**: đặt `OTT_SCORING_CORS_ORIGINS=https://<domain-vercel>`, chạy module trên `8110`, giữ Judge0 riêng ở `2358`, và cấu hình Tunnel hostname HTTPS trỏ tới `8110`. Không đặt secret máy chấm vào Vercel.
+- Trong Supabase Auth → URL Configuration, thêm domain Vercel vào Site URL/Redirect URLs.
+- URL máy chấm do người dùng nhập và lưu vào trình duyệt, hoặc URL admin lưu ở Supabase, phải truy cập được từ trình duyệt thí sinh. `localhost` trên máy ban tổ chức không dùng được với người xem từ xa.
+
+Các vòng 1–4 online vận hành qua Supabase RPC và scoring module. Vòng 5 offline chưa được triển khai; website cần Internet.

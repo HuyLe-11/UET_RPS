@@ -68,14 +68,14 @@ const games = await r.json();     // trình duyệt tự giải nén gzip
 - Replay đã nén gzip (~vài chục KB/trận). Bật cache Cloudflare **không** áp dụng được vì response là `private`; tải lớn
   thì giảm bằng cache phía trình duyệt (đã đặt `max-age=3600`).
 - Không tunnel cổng SSH/DB; chỉ ingress tới 8100 (và 8000 nếu cần).
-- Sao lưu `data/storage/` (rsync/Time Machine/ổ ngoài) cùng `ott.db`.
+- Sao lưu `servers/scoring` source storage riêng nếu cần giữ các bot đã nộp trên máy module. SQLite không thuộc quy trình hiện tại.
 
 ## 7. Xử lý sự cố
 | Triệu chứng | Cách xử lý |
 |---|---|
 | `502 Bad Gateway` ở Cloudflare | storage server chưa chạy / sai cổng trong `config.yml` |
 | `401` dù đã đăng nhập | access token hết hạn → gọi `/auth/refresh` |
-| `404 Replay chưa có trên máy chủ` | chưa chạy `python -m data.sync` (xuất replay ra file) |
+| `404 Replay chưa có trên máy chủ` | kiểm tra job/match có metadata `replay_objects` và object tương ứng trong private Supabase Storage |
 | Lỗi CORS | thêm origin vào `OTT_CORS_ORIGINS`, khởi động lại storage server |
 
 ## 8. Scoring module và Judge0
@@ -100,9 +100,8 @@ Judge0 tiếp tục bind riêng trên `127.0.0.1:2358`; không expose port này 
    `select public.timeout_scoring_jobs(now() - interval '3 minutes')`; kiểm tra job runs trên Dashboard.
 
 Bot mới cần định nghĩa `choose_move(state)` theo [`../servers/scoring/BOT_PROTOCOL.md`](../servers/scoring/BOT_PROTOCOL.md).
-Hiện đây mới là foundation cho submit đầu vào/test và replay; thao tác `close/grade`, live/offline scoring và
-admin vẫn còn phụ thuộc `ott.db`, nên không tắt SQLite/luồng backend cũ cho tới khi các pha đó migrate xong.
+Module cũng điều phối ghép/chấm các vòng online và thao tác admin qua Supabase RPC. Vòng offline không được triển khai. Các tệp SQLite cũ chỉ để trong backup, không khởi chạy song song với flow mới.
 # Cập nhật replay (2026-10-21)
 
-Replay của job chấm mới không cần Cloudflare Tunnel: scoring module upload gzip trực tiếp lên private Supabase Storage, frontend tải qua signed URL ngắn hạn. Tunnel vẫn cần để frontend gọi scoring module nhận bài. Các phần replay lịch sử bên dưới mô tả luồng local cũ và chưa được migrate tự động.
+Replay mới được scoring module nén rồi upload trực tiếp lên private Supabase Storage; frontend tải qua signed URL ngắn hạn. Tunnel chỉ dùng để trình duyệt gọi scoring module. Replay cũ trong local storage chưa được tự động import.
 

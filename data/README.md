@@ -1,31 +1,9 @@
-# data/ – tầng dữ liệu OTT
+# `data/` — Supabase schema and legacy storage
 
-| File | Vai trò |
-|---|---|
-| [DATABASE_DESIGN.md](DATABASE_DESIGN.md) | Thiết kế database, ER, RLS |
-| [supabase/migrations/0001_schema.sql](supabase/migrations/0001_schema.sql) | Schema Postgres cho Supabase |
-| [SUPABASE_SETUP.md](SUPABASE_SETUP.md) | Cấu hình Supabase từng bước |
-| [CLOUDFLARE_TUNNEL.md](CLOUDFLARE_TUNNEL.md) | Cấu hình máy local làm file server |
-| `auth_service.py` | Đăng ký / đăng nhập / đăng xuất / refresh (Supabase Auth), Flask blueprint `/auth/*` |
-| `supabase_client.py` | Client Auth + PostgREST (chỉ dùng thư viện chuẩn) |
-| `sync.py` | Đồng bộ `ott.db` → Supabase, xuất replay ra file |
-| `replay_store.py` | Lưu/đọc replay gzip trong `data/storage/` |
-| `storage_server.py` | Phục vụ replay (kiểm quyền bằng JWT + RLS) |
-| `manage.py` | CLI tạo/import tài khoản, đổi trạng thái |
+- `supabase/migrations/`: ordered schema and tournament RPC migrations. See [SUPABASE_SETUP.md](SUPABASE_SETUP.md).
+- `supabase_client.py`: lightweight Auth/PostgREST/Storage client used by backend and scoring module.
+- `auth_service.py`, `manage.py`: Supabase account administration; neither writes tournament state to SQLite.
+- `replay_store.py`, `storage_server.py`: retained for the older local replay service; new replays use private Supabase Storage.
+- `DATABASE_DESIGN.md`: historical database notes; current operations are described in [../docs/TOURNAMENT_OPERATIONS.md](../docs/TOURNAMENT_OPERATIONS.md).
 
-## Luồng
-1. Thí sinh `POST /auth/register` (hoặc BTC `manage.py import-users`) → `POST /auth/login` → nhận `access_token`.
-2. Gọi API cũ (`/submit`, `/me`, `/leaderboard`, `/replays`) với `Authorization: Bearer <token>` (header `X-Token` cũ vẫn dùng được).
-3. BTC `entry-close` / `close` / `grade` → `OTT_SUPABASE_SYNC=1` tự đẩy kết quả nhẹ lên Supabase và ghi replay ra `data/storage/`.
-4. Thí sinh xem BXH (`get_group_leaderboard`), xem replay qua `files.<domain>/replays/<match_id>`.
-
-`ott.db` (SQLite) vẫn là nơi engine ghi điểm khi chấm; Supabase là nơi lưu tài khoản và dữ liệu hiển thị.
-
-## Test
-```bash
-.venv/bin/python -m unittest data.tests.test_data_layer -v
-```
-# Cập nhật migration (2026-10-21)
-
-Backend web hiện không đọc/ghi SQLite. Dashboard dùng RPC Supabase; replay mới được nén và upload vào private Supabase Storage, người xem nhận signed URL ngắn hạn. SQLite và `data/sync.py` vẫn chỉ thuộc công cụ chấm/điều hành cũ; chưa migrate `grade_day`, ghép cặp và lịch sử. Xem `../SCORING_MIGRATION_HANDOFF.md` để biết các bước còn lại.
-
+The active tournament flow stores users, submissions, pairings, results, standings, advancement, and replay metadata in Supabase. Legacy SQLite code and its sync utility are archived in `../backup/legacy_sqlite/`; the database file itself is not included in Git or in that archive.

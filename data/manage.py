@@ -27,9 +27,6 @@ def main(argv=None):
     ap.add_argument("args", nargs="*")
     ap.add_argument("--admin", action="store_true")
     a = ap.parse_args(argv)
-    import tournament as T
-    T.init()
-
     if a.cmd == "check":
         n = len(auth_service.sb().select("tournament_state", {"select": "id"}))
         print("OK: kết nối Supabase, tournament_state có", n, "dòng")

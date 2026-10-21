@@ -18,10 +18,11 @@ import {
 } from 'lucide-react';
 import Auth, { Brand } from './Auth';
 import Replay from './Replay';
+import SubmissionHistory from './SubmissionHistory';
 import AdminDashboard from './AdminDashboard';
-import { createAndDispatchScoringJob, getReplayMetadata, getWebDashboard, supabase, type Replays, type ScoringJob, type ScoringState, type Standing, type Status, type User } from './api';
+import { createAndDispatchScoringJob, getMyTodayMatches, getReplayMetadata, getSavedScoringUrl, getWebDashboard, saveScoringUrl, supabase, type Replays, type ScoringJob, type ScoringState, type Standing, type Status, type TodayMatch, type User } from './api';
 
-const emptyReplays: Replays = { available: [], round: null, day: null, matches: [] };
+const emptyReplays: Replays = { available: [], round: null, day: null, matches: [], allMatches: [] };
 const statusLabel: Record<string, string> = {
   new: 'Chờ thi đầu vào',
   active: 'Đang thi đấu',
@@ -33,7 +34,8 @@ const statusLabel: Record<string, string> = {
 };
 
 function routeForPath(path: string, isAdmin: boolean) {
-  if (path.startsWith('/admin')) return isAdmin ? path : '/';
+  if (isAdmin) return path.startsWith('/admin') ? path : '/admin';
+  if (path.startsWith('/admin')) return '/';
   return ['/submission', '/ranking', '/replay', '/rules'].includes(path) ? path : '/';
 }
 
@@ -152,20 +154,30 @@ function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
   const [activeJobStatus, setActiveJobStatus] = useState<ScoringJob['status'] | null>(null);
   const [scoringState, setScoringState] = useState<ScoringState | null>(null);
   const [champion, setChampion] = useState<string | null>(null);
+  const [scoringUrl, setScoringUrl] = useState(getSavedScoringUrl);
+  const [todayMatches, setTodayMatches] = useState<TodayMatch[]>([]);
 
   const refresh = useCallback(async () => {
     setBusy(true);
     setError('');
     try {
-      const [dashboard, r] = await Promise.all([
+      const [dashboard, r, matches] = await Promise.all([
         getWebDashboard(),
         getReplayMetadata().catch(() => emptyReplays),
+        getMyTodayMatches().catch(() => [] as TodayMatch[]),
       ]);
       setStatus(dashboard.status);
       setStandings(dashboard.standings);
       if (r) setReplays(r);
+      setTodayMatches(matches);
       setChampion(dashboard.champion);
       setScoringState(dashboard.scoring);
+      setScoringUrl((current) => {
+        const configured = dashboard.scoring.scoringUrl || '';
+        const next = current || configured;
+        if (!current && next) saveScoringUrl(next);
+        return next;
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Không tải được dữ liệu');
     } finally {
@@ -174,8 +186,8 @@ function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
   }, []);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    if (user.role !== 'admin') void refresh();
+  }, [refresh, user.role]);
 
   useEffect(() => {
     if (!activeJobId) return;
@@ -199,7 +211,7 @@ function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
       if (job.status === 'succeeded') {
         const score = job.result?.converted_score;
         setMessage(typeof score === 'number'
-          ? `Chấm xong! Điểm sơ loại: ${score}/100.`
+          ? `Chấm xong! Điểm đầu vào có trọng số: ${score}/12.`
           : 'Đã nhận bài thành công.');
       } else {
         setError(job.error_code === 'module_unavailable'
@@ -235,7 +247,11 @@ function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
       if (file.size > 65536) throw new Error('File bot không được vượt quá 64 KB');
       
       setMessage('Đang gửi bài đến máy chấm…');
-      const jobId = await createAndDispatchScoringJob(file, 'entry');
+      const kind = scoringState?.phase === 'round' ? 'submission' : 'entry';
+      const context = kind === 'submission' && scoringState?.round && scoringState.day
+        ? { round: scoringState.round, day: scoringState.day }
+        : null;
+      const jobId = await createAndDispatchScoringJob(file, kind, scoringUrl, context);
       setActiveJobId(jobId);
       setActiveJobStatus('accepted');
       setMessage('Máy chấm đã nhận bài, đang chấm…');
@@ -259,9 +275,7 @@ function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
     ['rules', BookOpen, 'Luật thi đấu'],
   ] as const;
 
-  const navigation = user.role === 'admin'
-    ? [...baseNavigation, ['admin', ShieldCheck, 'Quản trị'] as const]
-    : baseNavigation;
+  const navigation = user.role === 'admin' ? [] : baseNavigation;
   const routeByTab: Record<string, string> = { overview: '/', submission: '/submission', ranking: '/ranking', replay: '/replay', rules: '/rules', admin: '/admin' };
   const entryLimitReached = scoringState?.phase === 'entry' && scoringState.attempts >= 20;
   // The server checks submission availability again when accepting a job.
@@ -286,28 +300,18 @@ function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
           ))}
         </nav>
 
-        <div className="sidebar-tip">
+        {user.role !== 'admin' && <div className="sidebar-tip">
           <ShieldCheck />
           <h3>Sẵn sàng bứt phá?</h3>
           <p>Hoàn thiện thuật toán rồi gửi bot để được chấm ngay trong giai đoạn đang mở.</p>
           <a href="/sample_bot.py" target="_blank" rel="noreferrer">
             Xem bot mẫu <ArrowRight size={15} />
           </a>
-        </div>
+        </div>}
 
-        <a className="live-link" href="/live-board.json" target="_blank" rel="noreferrer">
+        {user.role !== 'admin' && <a className="live-link" href="/live-board.json" target="_blank" rel="noreferrer">
           <span className="live-dot" /> Theo dõi live data
-        </a>
-
-        {user.role === 'admin' && !isAdminPage && (
-          <button
-            className="secondary full"
-            style={{ margin: '8px 0', fontSize: '0.85rem' }}
-            onClick={() => navigate('/admin')}
-          >
-            Vào trang Quản trị ↗
-          </button>
-        )}
+        </a>}
 
         <div className="sidebar-user">
           <span className="avatar">{user.name.slice(0, 2).toUpperCase()}</span>
@@ -346,7 +350,7 @@ function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
         </header>
 
         <main className="dashboard-content">
-          <div className="page-title">
+          {!isAdminPage && <div className="page-title">
             <div>
               <p className="eyebrow">LET’S MAKE YOUR NEXT MOVE</p>
               <h1>{isAdminPage ? (path === '/admin/server' ? 'Quản trị máy chấm' : path === '/admin/observation' ? 'Quan sát hoạt động' : path === '/admin/monitor' ? 'Giám sát hệ thống' : 'Quản trị cuộc thi') : tab === 'overview' ? `Chào ${user.name}!` : navigation.find((n) => n[0] === tab)?.[2]}</h1>
@@ -364,11 +368,11 @@ function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
                 {busy ? 'Đang tải' : 'Làm mới'}
               </button>
             )}
-          </div>
+          </div>}
 
-          {error && <div className="form-error" role="alert">{error}</div>}
-          {message && <div className="success" role="status"><Check size={18} />{message}</div>}
-          {(uploading || (activeJobId && ['dispatching', 'accepted', 'running'].includes(activeJobStatus || ''))) && (
+          {!isAdminPage && error && <div className="form-error" role="alert">{error}</div>}
+          {!isAdminPage && message && <div className="success" role="status"><Check size={18} />{message}</div>}
+          {!isAdminPage && (uploading || (activeJobId && ['dispatching', 'accepted', 'running'].includes(activeJobStatus || ''))) && (
             <div className="scoring-progress" role="status" aria-live="polite">
               <RefreshCw size={20} className="spin" />
               <div><strong>{uploading ? 'Đang gửi bài đến máy chấm' : 'Bài đã được nhận, đang chấm'}</strong>
@@ -377,7 +381,7 @@ function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
               <div className="scoring-progress-track"><i /></div>
             </div>
           )}
-          {champion && (
+          {!isAdminPage && champion && (
             <div className="champion-banner">
               <Trophy /> Nhà vô địch giải đấu: <strong>{champion}</strong>
             </div>
@@ -387,7 +391,7 @@ function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
 
           {(tab === 'overview' || tab === 'submission') && (
             <>
-              {tab === 'overview' && <>
+                  {tab === 'overview' && <>
               <section className="welcome-banner">
                 <div>
                   <span className="pill">ĐẤU TRƯỜNG THUẬT TOÁN</span>
@@ -431,7 +435,7 @@ function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
                     <Code2 className="muted" />
                   </div>
                   <p>Bot được chấm ngay sau khi gửi. Giai đoạn vòng loại cho tối đa 20 lượt; hệ thống giữ điểm cao nhất.</p>
-                  {scoringState?.phase === 'entry' && <p className="attempt-count">Đã dùng {Math.min(scoringState.attempts, 20)}/20 lượt · Điểm tốt nhất: {scoringState.bestScore ?? '—'}/100</p>}
+                  {scoringState?.phase === 'entry' && <p className="attempt-count">Đã dùng {Math.min(scoringState.attempts, 20)}/20 lượt · Điểm đầu vào tốt nhất: {scoringState.bestScore ?? '—'}/12</p>}
                   {scoringState && !submissionsAllowed && <p className="form-error">{entryLimitReached ? 'Bạn đã dùng hết 20 lượt vòng loại.' : 'Hiện tại hệ thống đang đóng nhận bài.'}</p>}
                   <div className="bot-language-readonly" aria-label="Ngôn ngữ bot bắt buộc">
                     <span>NGÔN NGỮ BẮT BUỘC</span>
@@ -439,11 +443,17 @@ function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
                     <small>Ngôn ngữ được cố định cho cuộc thi · không thể thay đổi</small>
                   </div>
                   <p className="language-note">Hãy gửi file Python `.py` có hàm `choose_move(state)`.</p>
+                  {scoringState?.phase === 'round' && <section className="today-opponents" aria-label="Các đối thủ hôm nay">
+                    <strong>Đối thủ của bạn hôm nay</strong>
+                    {todayMatches.length ? todayMatches.map((match) => <div key={`${match.rnd}-${match.day}-${match.rd}`}>
+                      <span>Lượt {match.rd}</span><span>{match.opponent}</span>
+                    </div>) : <p>Cặp đấu sẽ xuất hiện khi ban tổ chức mở ngày thi.</p>}
+                  </section>}
                   <form onSubmit={(e) => { e.preventDefault(); void upload(e.currentTarget); }}>
                     <label className="scoring-url-field">
-                      Nhập URL đến máy chấm
-                      <input type="url" required placeholder="https://scoring.example.com" aria-describedby="scoring-url-help" />
-                      <small id="scoring-url-help">URL này hiện chỉ để minh họa và chưa được dùng để gửi yêu cầu chấm bài.</small>
+                      URL máy chấm do ban tổ chức cung cấp
+                      <input type="url" required value={scoringUrl} placeholder="https://score.tenmiencuaban.vn" aria-describedby="scoring-url-help" onChange={(event) => { setScoringUrl(event.target.value); saveScoringUrl(event.target.value); }} />
+                      <small id="scoring-url-help">URL được kiểm tra trước khi gửi. Dùng HTTPS qua Cloudflare Tunnel; hệ thống lưu lựa chọn trên trình duyệt này.</small>
                     </label>
                     <label className="drop-zone">
                       <span className="upload-icon"><Upload /></span>
@@ -502,6 +512,7 @@ function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
                   </button>
                 </section>
               </div>
+              {tab === 'submission' && <SubmissionHistory user={user} replays={replays}/>}
             </>
           )}
 

@@ -48,4 +48,4 @@ Nếu module chưa nhận job trong 10 giây, frontend đánh dấu dispatch th�
 
 ## Giới hạn hiện tại
 
-Đây là đường local để thử các luồng đã chuyển sang scoring module, chưa phải migration hoàn tất. `grade_day`, một số thao tác admin/live/offline và các luồng SQLite còn tồn tại; cần đọc [SCORING_MIGRATION_HANDOFF.md](../../SCORING_MIGRATION_HANDOFF.md) trước khi coi kết quả là kiểm chứng toàn hệ thống. Không mở port `8110` ra internet. Truy cập từ trang Vercel HTTPS sẽ cần HTTPS tunnel; local Vite không cần tunnel.
+Đây là đường chạy local cho luồng Supabase và các vòng online. Trước khi thử điều hành, cần áp dụng migration `0005` và `0006`. Module scoring dùng Supabase làm nguồn dữ liệu, điều phối các lượt ghép và Judge0; vòng offline chưa được cài. Không mở port `8110` trực tiếp ra Internet. Trình duyệt Vercel cần HTTPS Tunnel tới module; Vite local có thể gọi địa chỉ local được CORS cho phép.
