@@ -7,20 +7,23 @@ import {
   Check,
   ChevronRight,
   Code2,
+  Eye,
   LayoutDashboard,
   LogOut,
   RefreshCw,
   ShieldCheck,
+  Server,
   Swords,
   Trophy,
   Upload,
   UserRound,
+  UserX,
 } from 'lucide-react';
 import Auth, { Brand } from './Auth';
 import Replay from './Replay';
 import SubmissionHistory from './SubmissionHistory';
 import AdminDashboard from './AdminDashboard';
-import { createAndDispatchScoringJob, getMyTodayMatches, getReplayMetadata, getSavedScoringUrl, getWebDashboard, saveScoringUrl, supabase, type Replays, type ScoringJob, type ScoringState, type Standing, type Status, type TodayMatch, type User } from './api';
+import { createAndDispatchScoringJob, getMyTodayMatches, getReplayMetadata, getSavedScoringUrl, getScoringBenchmarks, getWebDashboard, saveScoringUrl, supabase, type Replays, type ScoringBenchmark, type ScoringJob, type ScoringState, type Standing, type Status, type TodayMatch, type User } from './api';
 
 const emptyReplays: Replays = { available: [], round: null, day: null, matches: [], allMatches: [] };
 const statusLabel: Record<string, string> = {
@@ -156,6 +159,20 @@ function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
   const [champion, setChampion] = useState<string | null>(null);
   const [scoringUrl, setScoringUrl] = useState(getSavedScoringUrl);
   const [todayMatches, setTodayMatches] = useState<TodayMatch[]>([]);
+  const [practiceMode, setPracticeMode] = useState(false);
+  const [practiceBots, setPracticeBots] = useState<ScoringBenchmark[]>([]);
+  const [selectedPracticeBots, setSelectedPracticeBots] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!scoringUrl) { setPracticeBots([]); setSelectedPracticeBots([]); return; }
+    let cancelled = false;
+    void getScoringBenchmarks(scoringUrl).then((items) => {
+      if (cancelled) return;
+      setPracticeBots(items);
+      setSelectedPracticeBots((current) => current.length ? current.filter((id) => items.some((item) => item.id === id)) : items.slice(0, 1).map((item) => item.id));
+    }).catch(() => { if (!cancelled) setPracticeBots([]); });
+    return () => { cancelled = true; };
+  }, [scoringUrl]);
 
   const refresh = useCallback(async () => {
     setBusy(true);
@@ -247,11 +264,12 @@ function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
       if (file.size > 65536) throw new Error('File bot không được vượt quá 64 KB');
       
       setMessage('Đang gửi bài đến máy chấm…');
-      const kind = scoringState?.phase === 'round' ? 'submission' : 'entry';
+      const kind = practiceMode ? 'test' : scoringState?.phase === 'round' ? 'submission' : 'entry';
       const context = kind === 'submission' && scoringState?.round && scoringState.day
         ? { round: scoringState.round, day: scoringState.day }
         : null;
-      const jobId = await createAndDispatchScoringJob(file, kind, scoringUrl, context);
+      if (practiceMode && !selectedPracticeBots.length) throw new Error('Hãy chọn ít nhất một bot mẫu để luyện tập.');
+      const jobId = await createAndDispatchScoringJob(file, kind, scoringUrl, context, practiceMode ? selectedPracticeBots : []);
       setActiveJobId(jobId);
       setActiveJobStatus('accepted');
       setMessage('Máy chấm đã nhận bài, đang chấm…');
@@ -275,11 +293,23 @@ function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
     ['rules', BookOpen, 'Luật thi đấu'],
   ] as const;
 
-  const navigation = user.role === 'admin' ? [] : baseNavigation;
-  const routeByTab: Record<string, string> = { overview: '/', submission: '/submission', ranking: '/ranking', replay: '/replay', rules: '/rules', admin: '/admin' };
+  const adminNavigation = [
+    ['admin_tournament', ShieldCheck, 'Quản trị giải đấu'],
+    ['admin_eliminated', UserX, 'Thí sinh bị loại'],
+    ['admin_server', Server, 'Quản trị máy chấm'],
+    ['admin_observation', Eye, 'Quan sát hoạt động'],
+    ['admin_monitor', ChartNoAxesColumnIncreasing, 'Giám sát hệ thống'],
+  ] as const;
+  const navigation = user.role === 'admin' ? adminNavigation : baseNavigation;
+  const routeByTab: Record<string, string> = {
+    overview: '/', submission: '/submission', ranking: '/ranking', replay: '/replay', rules: '/rules', admin: '/admin',
+    admin_tournament: '/admin', admin_eliminated: '/admin/eliminated', admin_server: '/admin/server',
+    admin_observation: '/admin/observation', admin_monitor: '/admin/monitor',
+  };
   const entryLimitReached = scoringState?.phase === 'entry' && scoringState.attempts >= 20;
   // The server checks submission availability again when accepting a job.
   const submissionsAllowed = !scoringState || Boolean(scoringState.accepting && scoringState.phase !== 'done' && !entryLimitReached);
+  const uploadAllowed = practiceMode || submissionsAllowed;
 
   return (
     <div className="dashboard">
@@ -287,17 +317,14 @@ function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
         <Brand />
         <p className="nav-caption">{isAdminPage ? 'ĐIỀU HÀNH CUỘC THI' : 'ĐẤU TRƯỜNG CỦA BẠN'}</p>
         <nav>
-          {navigation.map(([key, Icon, text]) => (
-            <button
-              key={key}
-              className={tab === key ? 'active' : ''}
-              onClick={() => navigate(routeByTab[key])}
-            >
+          {navigation.map(([key, Icon, text]) => {
+            const active = isAdminPage ? path === routeByTab[key] : tab === key;
+            return <button key={key} className={active ? 'active' : ''} onClick={() => navigate(routeByTab[key])}>
               <Icon size={19} />
               {text}
-              {tab === key && <ChevronRight size={15} />}
-            </button>
-          ))}
+              {active && <ChevronRight size={15} />}
+            </button>;
+          })}
         </nav>
 
         {user.role !== 'admin' && <div className="sidebar-tip">
@@ -342,7 +369,7 @@ function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
       <div className="dashboard-main">
         <header className="dashboard-header">
           <span>
-            {isAdminPage ? 'Khu vực quản trị' : 'Không gian thi đấu'} <ChevronRight size={14} /> {isAdminPage ? (path === '/admin/server' ? 'Quản trị máy chấm' : path === '/admin/observation' ? 'Quan sát hoạt động' : path === '/admin/monitor' ? 'Giám sát hệ thống' : 'Quản trị cuộc thi') : navigation.find((n) => n[0] === tab)?.[2]}
+            {isAdminPage ? 'Khu vực quản trị' : 'Không gian thi đấu'} <ChevronRight size={14} /> {isAdminPage ? (navigation.find((n) => routeByTab[n[0]] === path)?.[2] || 'Quản trị giải đấu') : navigation.find((n) => n[0] === tab)?.[2]}
           </span>
           <span className="badge">
             <span className="live-dot" /> OTT ARENA · FIT-UET
@@ -353,7 +380,7 @@ function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
           {!isAdminPage && <div className="page-title">
             <div>
               <p className="eyebrow">LET’S MAKE YOUR NEXT MOVE</p>
-              <h1>{isAdminPage ? (path === '/admin/server' ? 'Quản trị máy chấm' : path === '/admin/observation' ? 'Quan sát hoạt động' : path === '/admin/monitor' ? 'Giám sát hệ thống' : 'Quản trị cuộc thi') : tab === 'overview' ? `Chào ${user.name}!` : navigation.find((n) => n[0] === tab)?.[2]}</h1>
+              <h1>{isAdminPage ? (navigation.find((n) => routeByTab[n[0]] === path)?.[2] || 'Quản trị giải đấu') : tab === 'overview' ? `Chào ${user.name}!` : navigation.find((n) => n[0] === tab)?.[2]}</h1>
               <p>
                 {tab === 'overview'
                   ? 'Một chiến thuật tốt bắt đầu từ một ý tưởng. Hôm nay bạn đã sẵn sàng chưa?'
@@ -435,8 +462,12 @@ function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
                     <Code2 className="muted" />
                   </div>
                   <p>Bot được chấm ngay sau khi gửi. Giai đoạn vòng loại cho tối đa 20 lượt; hệ thống giữ điểm cao nhất.</p>
-                  {scoringState?.phase === 'entry' && <p className="attempt-count">Đã dùng {Math.min(scoringState.attempts, 20)}/20 lượt · Điểm đầu vào tốt nhất: {scoringState.bestScore ?? '—'}/12</p>}
-                  {scoringState && !submissionsAllowed && <p className="form-error">{entryLimitReached ? 'Bạn đã dùng hết 20 lượt vòng loại.' : 'Hiện tại hệ thống đang đóng nhận bài.'}</p>}
+                  <div className="phase-controls"><button type="button" className={!practiceMode ? 'primary' : 'secondary'} onClick={() => setPracticeMode(false)}>Nộp bài thi</button><button type="button" className={practiceMode ? 'primary' : 'secondary'} onClick={() => setPracticeMode(true)}>Luyện tập</button></div>
+                  {!practiceMode && scoringState?.phase === 'entry' && <p className="attempt-count">Đã dùng {Math.min(scoringState.attempts, 20)}/20 lượt · Điểm đầu vào tốt nhất: {scoringState.bestScore ?? '—'}/12</p>}
+                  {!practiceMode && scoringState && !submissionsAllowed && <p className="form-error">{entryLimitReached ? 'Bạn đã dùng hết 20 lượt vòng loại.' : 'Hiện tại hệ thống đang đóng nhận bài.'}</p>}
+                  {practiceMode && <section className="today-opponents" aria-label="Chọn bot để luyện tập"><strong>Chọn bot mẫu để đấu</strong><p>Bài luyện tập có thể gửi ngoài khung thi, không tính vào 20 lượt vòng loại hoặc kết quả giải.</p>
+                    {practiceBots.length ? practiceBots.map((bot) => <label key={bot.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0' }}><input type="checkbox" checked={selectedPracticeBots.includes(bot.id)} onChange={(event) => setSelectedPracticeBots((current) => event.target.checked ? [...current, bot.id] : current.filter((id) => id !== bot.id))} />{bot.name}</label>) : <p>Chưa tải được danh sách bot mẫu. Kiểm tra URL máy chấm.</p>}
+                  </section>}
                   <div className="bot-language-readonly" aria-label="Ngôn ngữ bot bắt buộc">
                     <span>NGÔN NGỮ BẮT BUỘC</span>
                     <strong>Python 3</strong>
@@ -463,12 +494,12 @@ function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
                         aria-label="Chọn file bot Python"
                         type="file"
                         accept=".py"
-                        disabled={uploading || !submissionsAllowed}
+                        disabled={uploading || !uploadAllowed}
                         onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                       />
                     </label>
-                    <button className="primary" disabled={!file || uploading || !submissionsAllowed || Boolean(activeJobId)}>
-                      {uploading ? 'Đang gửi…' : activeJobId ? 'Đang chấm…' : 'Gửi bot để chấm ngay'}
+                    <button className="primary" disabled={!file || uploading || !uploadAllowed || (practiceMode && !selectedPracticeBots.length) || Boolean(activeJobId)}>
+                      {uploading ? 'Đang gửi…' : activeJobId ? 'Đang chấm…' : practiceMode ? 'Đấu bot mẫu để luyện tập' : 'Gửi bot để chấm ngay'}
                       <ArrowRight size={17} />
                     </button>
                   </form>
@@ -595,6 +626,10 @@ function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
               <p>Đưa quân đến đích: người đi trước đến i9, người đi sau đến a1; hoặc ăn hết một loại quân của đối phương. Hết nước đi, sai luật, quá thời gian hay bot lỗi đều bị xử thua. Quá 200 nước thì hòa.</p>
               <h3>Thể thức & chương trình bot</h3>
               <p>Mỗi trận BO2 gồm hai ván đổi lượt đi trước. Bot Python nhận một dòng JSON từ stdin và in ra bốn số x y nx ny trên stdout. Giới hạn 3 giây ở nước đầu của mỗi bên và 1 giây ở các nước tiếp theo.</p>
+              <h3>Cách tính điểm và xếp hạng</h3>
+              <p><strong>Vòng loại:</strong> mỗi lượt đấu BO2 với ba bot BTC cho điểm kết quả s0, s1, s2 từ góc nhìn thí sinh (thắng +1, hòa 0, thua −1 mỗi ván; tổng hai ván từ −2 đến +2). Điểm là <code>entry = 1×s0 + 2×s1 + 3×s2</code>. Mặc định ngưỡng là −2; dưới −2 không đạt. Tối đa 20 lượt, lấy điểm cao nhất; không có lượt chấm thì không vào vòng 1.</p>
+              <p><strong>Trong ngày:</strong> trận BO2 cho điểm ván s của A trong khoảng −2…+2. Nếu s dương, A nhận pts +1 và B −1; nếu âm thì ngược lại; nếu hòa mỗi bên 0. gs của A nhận s, gs của B nhận −s. Xếp hạng theo pts giảm dần, rồi gs giảm dần, rồi thứ tự ban đầu trong ngày.</p>
+              <p>Ngày 1 dùng seed chia bảng làm thứ tự ban đầu. Ngày sau dùng thứ hạng trung bình các ngày đã chấm. Mỗi bảng có 7 lượt ghép: lượt đầu ghép nửa trên với nửa dưới; các lượt sau ưu tiên đối thủ chưa gặp. Bảng lẻ người cho bye ở cuối thứ tự và ưu tiên người chưa từng được bye.</p>
               <a href="/sample_bot.py" target="_blank" rel="noreferrer" className="download-link">
                 <Code2 size={16} /> Đọc chương trình bot mẫu
               </a>

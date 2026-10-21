@@ -1,6 +1,6 @@
 # Cấu hình Supabase
 
-> **Trạng thái:** migration `0004` đã được áp dụng và replay đã chạy thử. Trước khi vận hành giải online và mở replay theo lịch sử, hãy chạy `0005`–`0007` theo đúng thứ tự. SQL mới được tạo trong workspace, chưa được áp dụng vào project Supabase từ phiên làm việc này.
+> **Trạng thái theo ghi chú triển khai trước:** migration `0004` đã được áp dụng và replay đã chạy thử. Trạng thái thực tế của project Supabase chưa xác nhận được trong phiên này. Các hàm quản trị, reset, cổng nhận bài, lượt vòng loại và tie-break mới cần migrations `0005`–`0013` chạy theo đúng thứ tự bên dưới; các migration `0008`–`0013` mới có trong workspace và chưa được áp dụng từ phiên làm việc này.
 
 ## 1. Tạo project
 1. Vào https://supabase.com → **New project** (chọn region gần VN: Singapore).
@@ -8,7 +8,7 @@
 
 ## 2. Chạy schema
 **Dashboard → SQL Editor → New query**, chạy tuần tự từng migration:
-`0001_schema.sql` → `0002_scoring_jobs.sql` → `0003_immediate_scoring_and_admin_phases.sql` → `0004_replay_storage_and_web_api.sql` → `0005_admin_monitoring_and_round_submissions.sql` → `0006_online_tournament_operations.sql` → `0007_submission_history_and_replay_visibility.sql`.
+`0001_schema.sql` → `0002_scoring_jobs.sql` → `0003_immediate_scoring_and_admin_phases.sql` → `0004_replay_storage_and_web_api.sql` → `0005_admin_monitoring_and_round_submissions.sql` → `0006_online_tournament_operations.sql` → `0007_submission_history_and_replay_visibility.sql` → `0008_admin_tournament_controls.sql` → `0009_fix_prepare_swiss_round_grp_ambiguity.sql` → `0010_handle_single_contestant_bye.sql` → `0011_safe_tournament_reset_and_resume.sql` → `0012_fix_scoring_and_submission_controls.sql` → `0013_entry_attempts_and_daily_tiebreak.sql`.
 Không chạy `0004` trước các migration tạo `matches` và `scoring_jobs`.
 
 ## 3. Cấu hình Auth

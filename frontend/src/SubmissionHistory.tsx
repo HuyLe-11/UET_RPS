@@ -54,11 +54,11 @@ export default function SubmissionHistory({ user, replays }: { user: User; repla
               && row.round === item.rnd && row.day === item.day)
             : [];
           return <details className="submission-history-item" key={item.id}>
-            <summary><span className="history-summary-main"><strong>{item.kind === 'entry' ? 'Vòng loại' : `Vòng ${item.rnd} · Ngày ${item.day}`}</strong>
+              <summary><span className="history-summary-main"><strong>{item.kind === 'entry' ? 'Vòng loại' : item.kind === 'test' ? 'Luyện tập' : `Vòng ${item.rnd} · Ngày ${item.day}`}</strong>
               <small>{new Date(item.created_at).toLocaleString()}</small></span>
               <span className={`history-status ${item.status}`}><i/>{statusText[item.status] || item.status}</span>
               <span className="history-score">{item.kind === 'entry' && typeof item.result?.qualification_score === 'number'
-                ? `${item.result.qualification_score}/12` : item.kind === 'entry' ? '—/12' : 'Bài thi'}</span>
+                ? `${item.result.qualification_score}/12` : item.kind === 'entry' ? '—/12' : item.kind === 'test' ? `${item.result?.total_match_pts ?? '—'} pts luyện tập` : 'Bài thi'}</span>
               <ChevronDown size={17}/>
             </summary>
             <div className="submission-history-details">
@@ -68,10 +68,14 @@ export default function SubmissionHistory({ user, replays }: { user: User; repla
                 {matchReplays.length ? <div className="history-match-list">{matchReplays.map(match => <HistoryReplay key={match.id} match={match} round={item.rnd!} day={item.day!}/>)}</div>
                   : <p className="muted">Chưa có replay được công bố cho ngày này.</p>}
               </>}
+              {item.status === 'succeeded' && item.kind === 'test' && <>
+                <p>Lượt luyện tập không ảnh hưởng thứ hạng giải đấu.</p>
+                {(item.result?.opponents || []).map((opponent: any) => <p key={opponent.name}>{opponent.name}: {opponent.match_score > 0 ? 'thắng' : opponent.match_score < 0 ? 'thua' : 'hòa'} ({opponent.match_score > 0 ? '+' : ''}{opponent.match_score})</p>)}
+              </>}
               {['failed', 'timed_out', 'dispatch_failed'].includes(item.status) && <p className="form-error"><AlertCircle size={16}/>{item.error_code || 'scoring_failed'}{item.error_message ? ` · ${item.error_message}` : ''}</p>}
               {item.status !== 'succeeded' && !['failed', 'timed_out', 'dispatch_failed'].includes(item.status) && <p>Máy chấm đang xử lý lượt gửi này.</p>}
-              {item.kind === 'entry' && item.status === 'succeeded' && (entryReplay
-                ? <HistoryReplay match={entryReplay} round={0} day={0}/>
+              {(item.kind === 'entry' || item.kind === 'test') && item.status === 'succeeded' && (entryReplay
+                ? <HistoryReplay match={entryReplay} round={0} day={0} label={item.kind === 'test' ? 'Replay luyện tập' : 'Replay vòng loại'}/>
                 : <p className="muted">Lượt này chưa có replay được lưu.</p>)}
             </div>
           </details>;
@@ -94,13 +98,13 @@ function EntryAnalysis({ item }: { item: SubmissionHistoryItem }) {
   </div>;
 }
 
-function HistoryReplay({ match, round, day }: { match: ReplayMatch; round: number; day: number }) {
+function HistoryReplay({ match, round, day, label }: { match: ReplayMatch; round: number; day: number; label?: string }) {
   const [requested, setRequested] = useState(false);
   const replayData = useMemo<Replays>(() => ({
     available: [{ round, day }], round, day, matches: [match], allMatches: [match],
   }), [match, round, day]);
   return <div className="history-replay">
-    <div><strong>{match.kind === 'job' ? 'Replay vòng loại' : `Lượt ${match.rd}: ${match.a} · ${match.s > 0 ? 'thắng' : match.s < 0 ? 'thua' : 'hòa'} · ${match.b}`}</strong>
+    <div><strong>{label || (match.kind === 'job' ? 'Replay vòng loại' : `Lượt ${match.rd}: ${match.a} · ${match.s > 0 ? 'thắng' : match.s < 0 ? 'thua' : 'hòa'} · ${match.b}`)}</strong>
       <button type="button" className="secondary" onClick={() => setRequested(value => !value)}>{requested ? 'Ẩn replay' : 'Yêu cầu replay'}<Swords size={15}/></button></div>
     {requested && <Replay data={replayData} onDay={() => undefined}/>}
   </div>;

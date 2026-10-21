@@ -5,6 +5,8 @@ import json
 import logging
 import os
 import re
+import uuid
+import ast
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -30,7 +32,7 @@ def _load_scoring_config():
 
 _load_scoring_config()
 
-from fastapi import FastAPI, File, Header, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -46,6 +48,7 @@ logger.setLevel(logging.INFO)
 logger.propagate = False
 
 BENCHMARK_PATH = Path(os.environ.get("OTT_BENCHMARK_BOT", ROOT / "sample_bots" / "sample_bot.py"))
+BENCHMARK_STORE = Path(os.environ.get("OTT_BENCHMARK_BOT_DIR", ROOT / "data" / "storage" / "practice_bots"))
 BOT_STORE = Path(os.environ.get("OTT_SCORING_BOT_DIR", ROOT / "data" / "storage" / "submissions"))
 MAX_SOURCE_BYTES = 65536
 JOB_ID_RE = re.compile(r"^[0-9a-fA-F-]{36}$")
@@ -60,6 +63,8 @@ _inflight = set()
 _tournament_lock = threading.Lock()
 _tournament_days = set()
 _tournament_reschedule = set()
+_tournament_retry_counts = {}
+_active_match_ids = set()
 _started_at = time.time()
 
 app = FastAPI(title="OTT Scoring Module", version="1.0.0")
@@ -136,6 +141,48 @@ def _local_result_path(job_id):
     if not JOB_ID_RE.fullmatch(job_id):
         raise ValueError("invalid job id")
     return BOT_STORE / job_id[:2] / f"{job_id}.py"
+
+
+def _cleanup_reset_source_files(max_batches=None):
+    """Delete local bot sources for jobs removed by the latest reset.
+
+    The SQL reset writes job IDs to a durable queue before deleting job rows, so
+    a module restart or a temporary disk/DB error can safely retry this cleanup.
+    """
+    deleted = 0
+    batches = 0
+    try:
+        while True:
+            rows = _rpc("admin_list_reset_source_cleanup_ids", {"p_limit": 5000}) or []
+            job_ids = [str(row.get("job_id", "")) for row in rows if row.get("job_id")]
+            if not job_ids:
+                return {"deleted": deleted, "complete": True}
+
+            acknowledged = []
+            for job_id in job_ids:
+                path = _local_result_path(job_id)
+                try:
+                    path.unlink(missing_ok=True)
+                    try:
+                        path.parent.rmdir()
+                    except OSError:
+                        pass
+                    acknowledged.append(job_id)
+                    deleted += 1
+                except OSError:
+                    logger.exception("Could not remove reset bot source %s", path)
+
+            if acknowledged:
+                _rpc("admin_ack_reset_source_cleanup_ids", {"p_job_ids": acknowledged})
+            if len(acknowledged) != len(job_ids):
+                return {"deleted": deleted, "complete": False}
+            batches += 1
+            if max_batches is not None and batches >= max_batches:
+                more = _rpc("admin_list_reset_source_cleanup_ids", {"p_limit": 1}) or []
+                return {"deleted": deleted, "complete": not bool(more)}
+    except Exception:
+        logger.exception("Could not drain reset bot-source cleanup queue")
+        return {"deleted": deleted, "complete": False}
 
 
 def _save_source(job_id, source):
@@ -243,6 +290,15 @@ def _run_job(job_id, source_path, job):
             matches = [run_match(source, path.read_bytes(), language_id=job.get("language_id")) for path in benchmark_paths]
             evaluation = _evaluate_entry(matches, weights, time.monotonic() - started)
             games = [game for match in matches for game in match["games"]]
+        elif job.get("kind") == "test":
+            catalog = {item["id"]: item for item in _benchmark_catalog()}
+            selected = job.get("benchmark_ids") or ["sample"]
+            selected_benchmarks = [catalog[benchmark_id] for benchmark_id in selected if benchmark_id in catalog]
+            if len(selected_benchmarks) != len(selected) or not selected_benchmarks:
+                raise ValueError("practice_benchmark_not_found")
+            matches = [run_match(source, Path(item["path"]).read_bytes(), language_id=job.get("language_id")) for item in selected_benchmarks]
+            evaluation = _evaluate_practice(matches, [item["name"] for item in selected_benchmarks])
+            games = [game for match in matches for game in match["games"]]
         else:
             match = run_match(source, BENCHMARK_PATH.read_bytes(), language_id=job.get("language_id"))
             evaluation = _evaluate_result(match, match.get("duration_seconds") or (time.monotonic() - started))
@@ -298,6 +354,34 @@ def _evaluate_entry(matches, weights, duration):
     }
 
 
+def _evaluate_practice(matches, names):
+    scores = [int(match.get("match_score", 0)) for match in matches]
+    return {
+        "ok": True,
+        "practice": True,
+        "opponents": [{"name": names[index] if index < len(names) else f"Bot {index + 1}",
+                       "match_score": score, "match_pts": (score > 0) - (score < 0)}
+                      for index, score in enumerate(scores)],
+        "total_match_pts": sum((score > 0) - (score < 0) for score in scores),
+        "games": [game for match in matches for game in match.get("games", [])],
+    }
+
+
+def _benchmark_catalog():
+    catalog = [{"id": "btc0", "name": "Bot BTC 1", "path": str(ROOT / "sample_bots" / "entry_bot0.py")},
+               {"id": "btc1", "name": "Bot BTC 2", "path": str(ROOT / "sample_bots" / "entry_bot1.py")},
+               {"id": "btc2", "name": "Bot BTC 3", "path": str(ROOT / "sample_bots" / "entry_bot2.py")},
+               {"id": "sample", "name": "Bot mẫu", "path": str(BENCHMARK_PATH)}]
+    try:
+        BENCHMARK_STORE.mkdir(parents=True, exist_ok=True)
+        for path in sorted(BENCHMARK_STORE.glob("*.py")):
+            parts = path.stem.split("_", 1)
+            catalog.append({"id": parts[0], "name": parts[1] if len(parts) > 1 else path.stem, "path": str(path)})
+    except OSError:
+        logger.exception("Could not enumerate practice benchmark bots")
+    return catalog
+
+
 def _store_job_replay(job_id, games):
     raw = json.dumps(games, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     compressed = gzip.compress(raw, compresslevel=6, mtime=0)
@@ -342,7 +426,8 @@ def _match_source(job_id):
         return None
     path = _local_result_path(str(job_id))
     if not path.is_file():
-        raise RuntimeError(f"Missing local bot source for completed submission job {job_id}")
+        logger.error("Missing local bot source for completed submission job %s", job_id)
+        return None
     return path.read_bytes()
 
 
@@ -352,9 +437,22 @@ def _process_tournament_day(round_number, day_number):
         "rnd": f"eq.{round_number}", "day": f"eq.{day_number}",
         "select": "state", "limit": "1",
     })
-    if not day_rows or day_rows[0]["state"] not in ("open", "grading"):
+    if not day_rows:
         return
     day_state = day_rows[0]["state"]
+    if day_state == "closed":
+        # Recover a day if the module stopped between the admin close action and
+        # its grading transition. The RPC is idempotent for open/closed days.
+        _rpc("admin_close_tournament_day", {})
+        day_rows = sb.select("contest_days", {
+            "rnd": f"eq.{round_number}", "day": f"eq.{day_number}",
+            "select": "state", "limit": "1",
+        })
+        if not day_rows:
+            return
+        day_state = day_rows[0]["state"]
+    if day_state not in ("open", "grading"):
+        return
     for rd in range(1, 8):
         matches = _rpc("prepare_swiss_round", {"p_rnd": round_number, "p_day": day_number, "p_rd": rd}) or []
         pending = [row for row in matches if row.get("match_state") in ("pending", "running")]
@@ -367,20 +465,40 @@ def _process_tournament_day(round_number, day_number):
             if ready_a and ready_b:
                 if not _rpc("mark_tournament_match_running", {"p_match_id": row["match_id"]}):
                     return
-                result = run_match(source_a, source_b)
-                _rpc("record_tournament_match", {
-                    "p_match_id": row["match_id"], "p_score_a": result["match_score"],
-                    "p_a_ready": True, "p_b_ready": True,
-                })
                 try:
-                    _store_match_replay(row["match_id"], result["games"])
-                except Exception:
-                    logger.exception("Could not upload replay for tournament match %s", row["match_id"])
+                    with _tournament_lock:
+                        _active_match_ids.add(int(row["match_id"]))
+                    result = run_match(source_a, source_b)
+                    try:
+                        # Keep the match leased as running until replay persistence
+                        # has finished, so an admin reset cannot orphan its upload.
+                        _store_match_replay(row["match_id"], result["games"])
+                    except Exception:
+                        logger.exception("Could not upload replay for tournament match %s", row["match_id"])
+                    _rpc("record_tournament_match", {
+                        "p_match_id": row["match_id"], "p_score_a": result["match_score"],
+                        "p_a_ready": True, "p_b_ready": True,
+                    })
+                finally:
+                    with _tournament_lock:
+                        _active_match_ids.discard(int(row["match_id"]))
             else:
-                _rpc("record_tournament_match", {
-                    "p_match_id": row["match_id"], "p_score_a": 0,
-                    "p_a_ready": ready_a, "p_b_ready": ready_b,
-                })
+                if day_state != "grading":
+                    return
+                # Claim pending work or an expired lease before awarding a
+                # forfeit. A still-running worker keeps its match protected.
+                if not _rpc("mark_tournament_match_running", {"p_match_id": row["match_id"]}):
+                    return
+                with _tournament_lock:
+                    _active_match_ids.add(int(row["match_id"]))
+                try:
+                    _rpc("record_tournament_match", {
+                        "p_match_id": row["match_id"], "p_score_a": 0,
+                        "p_a_ready": ready_a, "p_b_ready": ready_b,
+                    })
+                finally:
+                    with _tournament_lock:
+                        _active_match_ids.discard(int(row["match_id"]))
 
         # Keep the Judge0 load bounded while allowing independent pairs to run concurrently.
         futures = [_match_workers.submit(process_match, row) for row in pending]
@@ -392,7 +510,7 @@ def _process_tournament_day(round_number, day_number):
             return
         if unresolved:
             # A worker may have died while a match was marked running. Its DB lease
-            # expires after two minutes; retry once that claim can be recovered.
+            # expires after five minutes; retry once that claim can be recovered.
             retry = threading.Timer(125, _schedule_tournament_day, args=(round_number, day_number))
             retry.daemon = True
             retry.start()
@@ -418,8 +536,15 @@ def _schedule_tournament_day(round_number, day_number):
         try:
             logger.info("Processing Supabase tournament day r%s/d%s", round_number, day_number)
             _process_tournament_day(round_number, day_number)
+            _tournament_retry_counts.pop(key, None)
         except Exception:
             logger.exception("Tournament day processing failed for r%s/d%s", round_number, day_number)
+            retries = _tournament_retry_counts.get(key, 0) + 1
+            _tournament_retry_counts[key] = retries
+            retry_seconds = min(120, 5 * (2 ** min(retries - 1, 5)))
+            retry = threading.Timer(retry_seconds, _schedule_tournament_day, args=key)
+            retry.daemon = True
+            retry.start()
         finally:
             rerun = False
             with _tournament_lock:
@@ -436,10 +561,11 @@ def _schedule_tournament_day(round_number, day_number):
 @app.on_event("startup")
 def resume_tournament_work_after_restart():
     try:
+        _tournament_workers.submit(_cleanup_reset_source_files)
         rows = get_supabase().select("tournament_state", {
             "id": "eq.1", "select": "phase,current_round,current_day", "limit": "1",
         })
-        if rows and rows[0].get("phase") == "round":
+        if rows and rows[0].get("phase") == "round" and int(rows[0].get("current_day") or 0) > 0:
             _schedule_tournament_day(int(rows[0]["current_round"]), int(rows[0]["current_day"]))
     except Exception:
         logger.exception("Could not resume tournament work during startup")
@@ -497,6 +623,33 @@ async def close_qualification(authorization: str | None = Header(None)):
         raise HTTPException(status_code=409, detail=str(exc)[:300]) from None
 
 
+@app.post("/v1/admin/tournament/reset")
+async def reset_tournament(authorization: str | None = Header(None)):
+    _require_scoring_admin(authorization)
+    try:
+        with _dedupe_lock:
+            live_job_ids = sorted(_inflight)
+        with _tournament_lock:
+            live_match_ids = sorted(_active_match_ids)
+        result = _rpc("admin_reset_tournament_to_entry", {
+            "p_live_job_ids": live_job_ids,
+            "p_live_match_ids": live_match_ids,
+        })
+        source_cleanup = _cleanup_reset_source_files(max_batches=1)
+        if not source_cleanup["complete"]:
+            logger.error("Tournament reset committed; some local bot sources remain queued for cleanup")
+        return {"ok": True, "result": result, "source_cleanup": source_cleanup}
+    except Exception as exc:
+        logger.exception("Could not reset tournament")
+        raise HTTPException(status_code=409, detail=str(exc)[:300]) from None
+
+
+@app.post("/v1/admin/tournament/cleanup-reset-artifacts")
+async def cleanup_reset_artifacts(authorization: str | None = Header(None)):
+    _require_scoring_admin(authorization)
+    return {"ok": True, "source_cleanup": _cleanup_reset_source_files(max_batches=1)}
+
+
 @app.post("/v1/admin/tournament/open-day")
 async def open_tournament_day(payload: dict, authorization: str | None = Header(None)):
     _require_scoring_admin(authorization)
@@ -543,10 +696,40 @@ async def get_default_bot_language():
         raise HTTPException(status_code=503, detail="Không lấy được danh sách ngôn ngữ từ Judge0") from None
 
 
+@app.get("/v1/benchmarks")
+async def get_benchmarks():
+    return {"benchmarks": [{"id": item["id"], "name": item["name"]} for item in _benchmark_catalog()]}
+
+
+@app.post("/v1/admin/benchmarks")
+async def upload_benchmark(file: UploadFile = File(...), authorization: str | None = Header(None)):
+    _require_scoring_admin(authorization)
+    if not file.filename or Path(file.filename).suffix.lower() != ".py":
+        raise HTTPException(status_code=400, detail="Chỉ nhận file Python .py")
+    source = await file.read(MAX_SOURCE_BYTES + 1)
+    if not source or len(source) > MAX_SOURCE_BYTES:
+        raise HTTPException(status_code=413, detail="File bot phải có kích thước tối đa 64 KB")
+    try:
+        tree = ast.parse(source, filename="benchmark.py")
+        compile(tree, "benchmark.py", "exec")
+        if not any(isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "choose_move" for node in tree.body):
+            raise ValueError("Bot cần khai báo hàm choose_move(state)")
+    except (SyntaxError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=f"Lỗi cú pháp Python: {exc}") from None
+    name = re.sub(r"[^A-Za-z0-9_-]+", "-", Path(file.filename).stem).strip("-_")[:40] or "bot-mau"
+    benchmark_id = str(uuid.uuid4())
+    BENCHMARK_STORE.mkdir(parents=True, exist_ok=True)
+    target = BENCHMARK_STORE / f"{benchmark_id}_{name}.py"
+    target.write_bytes(source)
+    logger.info("Admin uploaded practice benchmark %s (%s bytes)", benchmark_id, len(source))
+    return {"ok": True, "benchmark": {"id": benchmark_id, "name": name}}
+
+
 @app.post("/v1/jobs/{job_id}", status_code=202)
 async def accept_job(
     job_id: str,
     file: UploadFile = File(...),
+    benchmark_ids: str = Form(""),
     authorization: str | None = Header(None),
 ):
     if not JOB_ID_RE.fullmatch(job_id):
@@ -581,6 +764,12 @@ async def accept_job(
         raise HTTPException(status_code=409, detail="Thông tin job không khớp hoặc job đã được xử lý")
     if job.get("kind") not in ("entry", "submission", "test"):
         raise HTTPException(status_code=400, detail="Loại job không được hỗ trợ")
+    if job.get("kind") == "test":
+        selected_ids = list(dict.fromkeys(item for item in benchmark_ids.split(",") if item)) or ["sample"]
+        available_ids = {item["id"] for item in _benchmark_catalog()}
+        if len(selected_ids) > 8 or any(item not in available_ids for item in selected_ids):
+            raise HTTPException(status_code=400, detail="Danh sách bot luyện tập không hợp lệ")
+        job["benchmark_ids"] = selected_ids
 
     source_path = _save_source(job_id, source)
     if not _capacity.acquire(blocking=False):
