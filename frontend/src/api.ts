@@ -5,7 +5,6 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJ
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-const API_BASE = import.meta.env.VITE_API_URL || '';
 const DEFAULT_SCORING_MODULE_URL = (import.meta.env.VITE_SCORING_MODULE_URL || '').replace(/\/$/, '');
 const SCORING_URL_STORAGE_KEY = 'ott.scoring_module_url';
 
@@ -95,7 +94,15 @@ export type ScoringBenchmark = { id: string; name: string };
 
 export async function getScoringBenchmarks(value: string): Promise<ScoringBenchmark[]> {
   const base = normalizeScoringUrl(value);
-  const response = await fetch(`${base}/v1/benchmarks`, { cache: 'no-store' });
+  let response: Response;
+  try {
+    response = await fetch(`${base}/v1/benchmarks`, { cache: 'no-store' });
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error('Không phân giải được URL máy chấm; hãy cập nhật tunnel trong mục Quản trị máy chấm.');
+    }
+    throw error;
+  }
   const payload = await response.json().catch(() => null);
   if (!response.ok) throw new Error(payload?.detail || `Không tải được bot mẫu (HTTP ${response.status}).`);
   return Array.isArray(payload?.benchmarks) ? payload.benchmarks : [];
@@ -227,44 +234,6 @@ export interface ScoringState {
   round?: number | null;
   day?: number | null;
   scoringUrl?: string | null;
-}
-
-export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = await getAccessToken();
-  const headers = new Headers(options.headers);
-  
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`);
-  }
-
-  const url = `${API_BASE}${path}`;
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
-
-  const contentType = response.headers.get('content-type') || '';
-  let data: any = null;
-  if (contentType.includes('application/json')) {
-    data = await response.json();
-  } else {
-    data = await response.text();
-  }
-
-  if (!response.ok) {
-    const errorMsg = (typeof data === 'object' && (data?.detail || data?.error || data?.message)) || 'Không thể hoàn tất yêu cầu';
-    throw new ApiError(errorMsg, response.status);
-  }
-
-  return data as T;
-}
-
-export function post<T>(path: string, body: unknown) {
-  return api<T>(path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
 }
 
 export interface User {

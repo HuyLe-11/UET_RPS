@@ -15,7 +15,7 @@ from pathlib import Path
 # Load root/data secrets first, then scoring-specific defaults. Existing shell
 # variables and root/data .env values take precedence over config.local.env.
 ROOT = Path(__file__).resolve().parents[2]
-from backend import config as _backend_config  # noqa: E402,F401
+from data import config as _data_config  # noqa: E402,F401
 
 
 def _load_scoring_config():
@@ -36,7 +36,7 @@ from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from backend.supabase_client import get_supabase
+from data.supabase_client import get_supabase
 from .judge0_runner import Judge0Error, default_bot_language, judge0_status, run_match
 
 logger = logging.getLogger("ott.scoring")

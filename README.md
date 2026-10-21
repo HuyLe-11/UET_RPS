@@ -3,7 +3,7 @@
 ## Kiến trúc vận hành
 
 - `frontend/`: ứng dụng Vite/React, đăng nhập và giao diện thí sinh/admin.
-- `backend/`: API nhẹ cho quản trị tài khoản và các thao tác không phù hợp gọi trực tiếp từ trình duyệt.
+- `admin_cli_service/`: CLI tin cậy để tạo/import tài khoản admin bằng service-role key; không chạy như web API.
 - `servers/scoring/`: module nhận bài, điều phối giải online, gọi Judge0, tải replay lên Supabase Storage.
 - Supabase Postgres là nguồn dữ liệu chuẩn cho tài khoản, bài nộp, lịch đấu, điểm, ghép cặp và xét vòng. SQLite không thuộc luồng vận hành mới.
 - `tournament.py status` chỉ đọc trạng thái Supabase. Các thao tác vận hành giải dùng `/admin` và scoring module.
@@ -30,7 +30,7 @@ Chạy SQL Editor theo thứ tự `0001` → `0002` → `0003` → `0004` → `0
 1. Cấu hình Supabase/Judge0 trong `servers/scoring/config.local.env` (không commit secrets).
 2. Khởi động Judge0 tại port `2358`.
 3. Chạy scoring module tại port `8110`, rồi cấu hình public HTTPS Tunnel tới module.
-4. Khởi động backend và frontend theo hướng dẫn local trong `servers/scoring/LOCAL_TEST.md`.
+4. Khởi động frontend và scoring module theo hướng dẫn local trong `servers/scoring/LOCAL_TEST.md`.
 5. Đăng nhập `/admin`, kiểm tra URL máy chấm, đóng vòng đầu vào, mở/chốt từng ngày và dùng Resume nếu worker bị gián đoạn.
 
 Module dùng song song tối đa `OTT_TOURNAMENT_MATCH_WORKERS` trận (mặc định 4), xử lý nền và phục hồi ngày đang mở/chấm khi khởi động lại. Bot và replay gốc vẫn được lưu trong Supabase/local scoring storage theo cấu hình.

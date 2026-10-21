@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import {
   Activity, Ban, Check, CircleAlert, Cloud, Database, Eye,
   FileSpreadsheet, Gauge, RefreshCw, Server, ShieldCheck,
-  Swords, Trophy, UserPlus, Upload, Users, UserX, RotateCcw,
+  Swords, Trophy, Upload, Users, UserX, RotateCcw,
 } from 'lucide-react';
-import { api, getScoringAdminMetrics, getScoringBenchmarks, postScoringAdmin, probeScoringServer, post, supabase, uploadScoringBenchmark, type ScoringBenchmark } from './api';
+import { getScoringAdminMetrics, getScoringBenchmarks, postScoringAdmin, probeScoringServer, supabase, uploadScoringBenchmark, type ScoringBenchmark } from './api';
 
 type Section = 'tournament' | 'eliminated' | 'server' | 'observation' | 'monitor';
 type MonitorSnapshot = {
@@ -31,6 +31,13 @@ const sectionForRoute = (route: string): Section => route === '/admin/server' ? 
       : route === '/admin/eliminated' ? 'eliminated' : 'tournament';
 const formatBytes = (bytes: number) => bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 const formatTime = (value?: string | null) => value ? new Date(value).toLocaleString() : '—';
+
+function describeSupabaseError(error: unknown, operation: string): Error {
+  const candidate = error as { message?: string; code?: string; details?: string; hint?: string } | null;
+  const parts = [candidate?.code, candidate?.message, candidate?.details, candidate?.hint].filter(Boolean);
+  const detail = parts.join(' — ') || 'Không có chi tiết từ Supabase.';
+  return new Error(`${operation}: ${detail}`);
+}
 
 async function drainReplayCleanupQueue(): Promise<{ deleted: number; complete: boolean }> {
   let deleted = 0;
@@ -82,13 +89,6 @@ export default function AdminDashboard({ route, navigate }: { route: string; nav
   const [eliminatedContestants, setEliminatedContestants] = useState<Array<Record<string, any>>>([]);
   const [contestantActionId, setContestantActionId] = useState<string | null>(null);
 
-  const [newAdminEmail, setNewAdminEmail] = useState('');
-  const [newAdminUser, setNewAdminUser] = useState('');
-  const [newAdminPass, setNewAdminPass] = useState('');
-  const [adminBusy, setAdminBusy] = useState(false);
-  const [csvFile, setCsvFile] = useState<File | null>(null);
-  const [csvBusy, setCsvBusy] = useState(false);
-  const [csvResult, setCsvResult] = useState<any>(null);
   const [benchmarkFile, setBenchmarkFile] = useState<File | null>(null);
   const [benchmarks, setBenchmarks] = useState<ScoringBenchmark[]>([]);
   const [benchmarkBusy, setBenchmarkBusy] = useState(false);
@@ -100,7 +100,12 @@ export default function AdminDashboard({ route, navigate }: { route: string; nav
       if (rpcError) throw rpcError;
       const result = data as MonitorSnapshot;
       const { data: liveData, error: liveError } = await supabase.rpc('get_admin_live_standings');
-      if (!liveError) result.live_standings = liveData;
+      if (liveError) {
+        console.error('[admin] get_admin_live_standings failed', liveError);
+        setError(describeSupabaseError(liveError, 'Không tải được bảng xếp hạng trực tiếp').message);
+      } else {
+        result.live_standings = liveData;
+      }
       setSnapshot(result);
       if (!urlTouched) setScoringUrl(result.state.scoring_module_url || '');
       setPhase(result.state.phase);
@@ -117,7 +122,10 @@ export default function AdminDashboard({ route, navigate }: { route: string; nav
 
   const refreshEliminated = useCallback(async () => {
     const { data, error: rpcError } = await supabase.rpc('admin_list_eliminated_contestants');
-    if (rpcError) throw rpcError;
+    if (rpcError) {
+      console.error('[admin] admin_list_eliminated_contestants failed', rpcError);
+      throw describeSupabaseError(rpcError, 'Không tải được danh sách thí sinh đã loại');
+    }
     setEliminatedContestants((data || []) as Array<Record<string, any>>);
   }, []);
 
@@ -171,7 +179,12 @@ export default function AdminDashboard({ route, navigate }: { route: string; nav
     if (section !== 'server' || !scoringUrl) return;
     let cancelled = false;
     void getScoringBenchmarks(scoringUrl).then((items) => { if (!cancelled) setBenchmarks(items); })
-      .catch(() => { if (!cancelled) setBenchmarks([]); });
+      .catch((err: any) => {
+        if (!cancelled) {
+          setBenchmarks([]);
+          setError(err?.message || 'Không tải được bot mẫu; hãy kiểm tra URL tunnel và phiên bản scoring module.');
+        }
+      });
     return () => { cancelled = true; };
   }, [section, scoringUrl]);
 
@@ -235,7 +248,9 @@ export default function AdminDashboard({ route, navigate }: { route: string; nav
     await refresh();
     if (section === 'eliminated') {
       try { await refreshEliminated(); }
-      catch (err: any) { setError(err?.message || 'Không tải được danh sách thí sinh đã loại.'); }
+      catch (err: any) {       const described = describeSupabaseError(err, 'Không tải được danh sách thí sinh đã loại');
+      console.error('[admin] admin_list_eliminated_contestants failed', err);
+      setError(described.message); }
     }
   }
 
@@ -344,32 +359,6 @@ export default function AdminDashboard({ route, navigate }: { route: string; nav
     } finally { setContestantActionId(null); }
   }
 
-  async function createAdmin(event: React.FormEvent) {
-    event.preventDefault(); setAdminBusy(true); setError(''); setMessage('');
-    try {
-      const result = await post<{ admin: { username: string; email: string } }>('/api/admin/create-admin', {
-        email: newAdminEmail.trim(), username: newAdminUser.trim(), password: newAdminPass,
-      });
-      setMessage(`Đã tạo tài khoản quản trị ${result.admin.username}.`);
-      setNewAdminEmail(''); setNewAdminUser(''); setNewAdminPass('');
-      await refresh(false);
-    } catch (err: any) { setError(err?.message || 'Tạo tài khoản thất bại.'); }
-    finally { setAdminBusy(false); }
-  }
-
-  async function importAdmins(event: React.FormEvent) {
-    event.preventDefault(); if (!csvFile) return;
-    setCsvBusy(true); setError(''); setMessage(''); setCsvResult(null);
-    const form = new FormData(); form.append('file', csvFile);
-    try {
-      const result = await api<{ result: any }>('/api/admin/import-admins', { method: 'POST', body: form });
-      setCsvResult(result.result);
-      setMessage(`Đã nhập ${result.result.success_count} tài khoản quản trị.`);
-      setCsvFile(null);
-    } catch (err: any) { setError(err?.message || 'Nhập CSV thất bại.'); }
-    finally { setCsvBusy(false); }
-  }
-
   const title = section === 'server' ? 'Máy chấm' : section === 'observation' ? 'Quan sát cuộc thi' : section === 'monitor' ? 'Giám sát hệ thống' : section === 'eliminated' ? 'Thí sinh bị loại' : 'Tổng quan giải đấu';
   const counts = snapshot?.profile_counts || {};
   const jobCounts = snapshot?.job_counts || {};
@@ -439,22 +428,10 @@ export default function AdminDashboard({ route, navigate }: { route: string; nav
         {phase === 'round' && round === 5 && <p className="muted server-note">Vòng thứ năm thi offline chưa được cài đặt. Hệ thống này chỉ vận hành các vòng online.</p>}
       </section>
       <EntrantsTable entrants={snapshot?.entrants || []} />
-      <details className="panel"><summary className="admin-details-summary"><UserPlus size={17} /> Quản lý tài khoản ban tổ chức</summary>
-        <div className="content-grid" style={{ marginTop: 18 }}>
-          <form onSubmit={createAdmin} className="panel"><SectionHeading icon={UserPlus} eyebrow="TÀI KHOẢN QUẢN TRỊ" title="Tạo tài khoản" />
-            <label>Email<input type="email" required value={newAdminEmail} onChange={(e) => setNewAdminEmail(e.target.value)} /></label>
-            <label>Tên đăng nhập<input required minLength={3} maxLength={20} pattern="[A-Za-z0-9_]{3,20}" value={newAdminUser} onChange={(e) => setNewAdminUser(e.target.value)} /></label>
-            <label>Mật khẩu<input type="password" required minLength={8} value={newAdminPass} onChange={(e) => setNewAdminPass(e.target.value)} /></label>
-            <button className="primary" disabled={adminBusy}>{adminBusy ? 'Đang tạo…' : 'Tạo tài khoản'}</button>
-          </form>
-          <form onSubmit={importAdmins} className="panel"><SectionHeading icon={FileSpreadsheet} eyebrow="NHẬP DANH SÁCH" title="Import admin từ CSV" />
-            <p>CSV cần các cột <code>email,username,password</code>.</p>
-            <input type="file" accept=".csv" onChange={(e) => setCsvFile(e.target.files?.[0] || null)} />
-            <button className="primary" disabled={!csvFile || csvBusy}><Upload size={15} />{csvBusy ? 'Đang nhập…' : 'Nhập tài khoản'}</button>
-            {csvResult && <p>{csvResult.success_count} thành công · {csvResult.error_count} lỗi</p>}
-          </form>
-        </div>
-      </details>
+      <section className="panel">
+        <SectionHeading icon={ShieldCheck} eyebrow="TÀI KHOẢN QUẢN TRỊ" title="Quản lý bằng CLI an toàn" />
+        <p>Việc tạo và import tài khoản admin được thực hiện bằng code trên máy tin cậy, không qua trình duyệt. Dùng <code>admin_cli_service</code> với service-role key chỉ trên môi trường quản trị.</p>
+      </section>
     </>}
 
     {section === 'eliminated' && <>

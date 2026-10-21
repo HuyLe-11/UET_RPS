@@ -13,9 +13,10 @@ Có thể quan sát luồng local mà chưa deploy và chưa cần Cloudflare Tu
    docker compose up -d --force-recreate server workers
    curl http://127.0.0.1:2358/config_info
    ```
-
    Kiểm tra response `config_info` có `max_cpu_time_limit >= 30`, `max_wall_time_limit >= 140`, `max_memory_limit >= 262144`.
-4. Cài dependencies backend/frontend theo cấu hình hiện có của repo.
+   `OTT_JUDGE0_URL` phải là URL đầy đủ như `http://127.0.0.1:2358`; sau mọi thay đổi
+   trong `config.local.env`, phải restart scoring module vì cấu hình được nạp lúc process khởi động.
+4. Cài dependencies scoring/frontend theo cấu hình hiện có của repo.
 
 ## Chạy
 
@@ -48,4 +49,4 @@ Nếu module chưa nhận job trong 10 giây, frontend đánh dấu dispatch th�
 
 ## Giới hạn hiện tại
 
-Đây là đường chạy local cho luồng Supabase và các vòng online. Trước khi thử điều hành, cần áp dụng migration `0005` và `0006`. Module scoring dùng Supabase làm nguồn dữ liệu, điều phối các lượt ghép và Judge0; vòng offline chưa được cài. Không mở port `8110` trực tiếp ra Internet. Trình duyệt Vercel cần HTTPS Tunnel tới module; Vite local có thể gọi địa chỉ local được CORS cho phép.
+Đây là đường chạy local cho luồng Supabase và các vòng online. Trước khi thử điều hành, cần áp dụng migration `0005` và `0006`. Module scoring dùng Supabase làm nguồn dữ liệu, điều phối các lượt ghép và Judge0; vòng offline chưa được cài. Không mở port `8110` trực tiếp ra Internet. Trình duyệt Vercel cần HTTPS Tunnel tới module; Vite local có thể gọi địa chỉ local được CORS cho phép. Không còn FastAPI port `8000`; các thao tác admin account chạy bằng `admin_cli_service`.

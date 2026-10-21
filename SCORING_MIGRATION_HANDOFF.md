@@ -175,7 +175,7 @@ Những file cũ trong phần checklist phía trên được giữ làm lịch s
 ## Trạng thái code trong workspace
 
 - `data/supabase/migrations/0002_scoring_jobs.sql` mới tạo; phải review/apply lên Supabase project trước khi frontend submit mới hoạt động.
-- `servers/scoring/module.py` chỉ bind `127.0.0.1:8110` và dùng `backend.supabase_client`/service role. Bảo mật service-role key trong máy module.
+- `servers/scoring/module.py` chỉ bind `127.0.0.1:8110` và dùng `data.supabase_client`/service role. Bảo mật service-role key trong máy module.
 - `servers/scoring/judge0_runner.py` chạy `choose_move(state)`/`choose_best_move(state)` trong một Judge0 Python submission cho BO2, spawn candidate subprocess giữ sống theo ván; child process trong isolate chưa được xác minh. Migration 0003 chuyển upload sang chấm ngay, giới hạn 20 lượt phase entry và giữ điểm cao nhất. Flow giải đấu theo ngày/grade_day vẫn chưa được chuyển.
 - `frontend/src/App.tsx` / `api.ts` submit qua URL thí sinh nhập (hoặc URL admin cấu hình làm mặc định), kiểm tra `/v1/health`, tạo job Supabase và gửi file tới module. Cần HTTPS public URL, CORS allowlist `OTT_SCORING_CORS_ORIGINS` trong module và Cloudflare Tunnel. Không còn bắt buộc `VITE_SCORING_MODULE_URL` nếu URL được lưu trong Supabase/nhập trên form.
 - Replay UI đọc metadata từ `get_my_replay_matches`, ký URL qua Supabase Storage SDK và tải gzip trực tiếp; replay job mới chỉ xuất hiện sau khi `0004` được apply.

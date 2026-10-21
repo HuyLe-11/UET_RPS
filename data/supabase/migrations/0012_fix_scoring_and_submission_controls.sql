@@ -10,7 +10,7 @@ begin
     raise exception 'admin_required' using errcode = '42501';
   end if;
   return query
-    select p.id, p.username, au.email, p.status, p.entry_score, p.created_at,
+    select p.id, p.username, au.email::text, p.status, p.entry_score, p.created_at,
            rm.grp
     from public.profiles p
     join auth.users au on au.id = p.id
