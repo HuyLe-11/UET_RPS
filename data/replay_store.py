@@ -7,6 +7,7 @@ import gzip
 import json
 import os
 import re
+import uuid
 
 from . import config
 
@@ -48,3 +49,28 @@ def read_gz_bytes(rnd, day, grp, rd, a, b, base=None):
 def load(rnd, day, grp, rd, a, b, base=None):
     raw = read_gz_bytes(rnd, day, grp, rd, a, b, base)
     return None if raw is None else json.loads(gzip.decompress(raw))
+
+
+def job_replay_path(job_id, base=None):
+    """Replay for a standalone entry/test scoring job, keyed by a trusted UUID."""
+    key = str(uuid.UUID(str(job_id)))
+    base = base or os.path.join(config.REPLAY_DIR, "jobs")
+    return os.path.join(base, f"{key}.json.gz")
+
+
+def save_job(job_id, games, base=None):
+    path = job_replay_path(job_id, base)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp"
+    with gzip.open(tmp, "wt", encoding="utf-8", compresslevel=6) as f:
+        json.dump(games, f, separators=(",", ":"))
+    os.replace(tmp, path)
+    return path
+
+
+def load_job(job_id, base=None):
+    path = job_replay_path(job_id, base)
+    if not os.path.isfile(path):
+        return None
+    with gzip.open(path, "rt", encoding="utf-8") as f:
+        return json.load(f)

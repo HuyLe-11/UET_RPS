@@ -77,3 +77,32 @@ const games = await r.json();     // trình duyệt tự giải nén gzip
 | `401` dù đã đăng nhập | access token hết hạn → gọi `/auth/refresh` |
 | `404 Replay chưa có trên máy chủ` | chưa chạy `python -m data.sync` (xuất replay ra file) |
 | Lỗi CORS | thêm origin vào `OTT_CORS_ORIGINS`, khởi động lại storage server |
+
+## 8. Scoring module và Judge0
+
+Judge0 tiếp tục bind riêng trên `127.0.0.1:2358`; không expose port này qua Cloudflare. API điều phối chấm chạy ở
+`127.0.0.1:8110`, dùng hostname `score.<domain>` trong `data/cloudflared.config.example.yml`.
+
+1. Apply các migration theo thứ tự, gồm `0002_scoring_jobs.sql` và `0003_immediate_scoring_and_admin_phases.sql`, trong Supabase SQL Editor.
+2. Khởi động Judge0 bằng Compose trong `servers/scoring/judge0-v1.13.0/`; copy các biến phù hợp từ
+   `servers/scoring/.env.example` vào root `.env` hoặc `data/.env` (đây là các file được loader đọc). Module dùng Supabase service role, chỉ giữ key ở máy chấm. Trong file
+   `judge0.conf` local (đang ignore vì có secrets), đặt `MAX_CPU_TIME_LIMIT=60`,
+   `MAX_WALL_TIME_LIMIT=200`, `MAX_MEMORY_LIMIT=512000`; submission runner mặc định dùng 30s CPU,
+   140s wall time và 262144 KB RAM. Sau khi đổi file, recreate cả `server` và `workers`, rồi xác nhận
+   `GET http://127.0.0.1:2358/config_info` trả về các max trên. Runner kiểm tra `config_info` trước mỗi job
+   và dừng với lỗi cấu hình dễ hiểu nếu Judge0 vẫn báo max 15/20. Giữ `judge0.conf` khỏi Git.
+3. Chạy `servers/scoring/start_module.sh`; kiểm tra `http://127.0.0.1:8110/v1/health`.
+4. Thêm `score.<domain> -> http://127.0.0.1:8110` vào tunnel config, rồi kiểm tra
+   `https://score.<domain>/v1/health`.
+5. Đặt `VITE_SCORING_MODULE_URL=https://score.<domain>` trong môi trường build Vercel và
+   `OTT_SCORING_CORS_ORIGINS=https://<domain-web>` trên máy chấm.
+6. Bật [Supabase Cron](https://supabase.com/docs/guides/cron) rồi schedule mỗi phút SQL
+   `select public.timeout_scoring_jobs(now() - interval '3 minutes')`; kiểm tra job runs trên Dashboard.
+
+Bot mới cần định nghĩa `choose_move(state)` theo [`../servers/scoring/BOT_PROTOCOL.md`](../servers/scoring/BOT_PROTOCOL.md).
+Hiện đây mới là foundation cho submit đầu vào/test và replay; thao tác `close/grade`, live/offline scoring và
+admin vẫn còn phụ thuộc `ott.db`, nên không tắt SQLite/luồng backend cũ cho tới khi các pha đó migrate xong.
+# Cập nhật replay (2026-10-21)
+
+Replay của job chấm mới không cần Cloudflare Tunnel: scoring module upload gzip trực tiếp lên private Supabase Storage, frontend tải qua signed URL ngắn hạn. Tunnel vẫn cần để frontend gọi scoring module nhận bài. Các phần replay lịch sử bên dưới mô tả luồng local cũ và chưa được migrate tự động.
+

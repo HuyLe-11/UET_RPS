@@ -25,3 +25,7 @@
 ```bash
 .venv/bin/python -m unittest data.tests.test_data_layer -v
 ```
+# Cập nhật migration (2026-10-21)
+
+Backend web hiện không đọc/ghi SQLite. Dashboard dùng RPC Supabase; replay mới được nén và upload vào private Supabase Storage, người xem nhận signed URL ngắn hạn. SQLite và `data/sync.py` vẫn chỉ thuộc công cụ chấm/điều hành cũ; chưa migrate `grade_day`, ghép cặp và lịch sử. Xem `../SCORING_MIGRATION_HANDOFF.md` để biết các bước còn lại.
+

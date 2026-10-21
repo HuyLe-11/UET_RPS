@@ -17,3 +17,15 @@ __pycache__/
 *.pyc
 
 servers/
+!servers/
+servers/*
+!servers/scoring/
+servers/scoring/*
+!servers/scoring/*.py
+!servers/scoring/*.sh
+!servers/scoring/*.md
+!servers/scoring/.env.example
+!servers/scoring/config.local.env
+!servers/scoring/judge0-v1.13.0/
+servers/scoring/judge0-v1.13.0/*
+!servers/scoring/judge0-v1.13.0/docker-compose.yml

@@ -73,3 +73,7 @@ Quy mô 4000 người: `round_members` ≤ ~4000 dòng/vòng; `daily_results` �
 - Tắt "Allow new users to sign up" trong Supabase; tài khoản tạo qua backend (`data/manage.py`).
 
 SQL đầy đủ: [`supabase/migrations/0001_schema.sql`](supabase/migrations/0001_schema.sql).
+# Trạng thái kiến trúc hiện tại (2026-10-21)
+
+Tài liệu bên dưới mô tả thiết kế SQLite đồng bộ cũ và chưa phản ánh v0 mới. Backend web hiện đọc dashboard từ Supabase RPC, metadata/điểm ở Postgres; replay mới nằm trong private Supabase Storage. SQLite chỉ còn trong tool chấm/điều hành legacy và dữ liệu lịch sử; `SCORING_MIGRATION_HANDOFF.md` là nguồn tiến độ chính.
+
