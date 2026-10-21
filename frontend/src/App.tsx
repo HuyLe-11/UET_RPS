@@ -155,6 +155,8 @@ function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [activeJobStatus, setActiveJobStatus] = useState<ScoringJob['status'] | null>(null);
+  const [latestScoringResult, setLatestScoringResult] = useState<Record<string, any> | null>(null);
+  const [latestScoringKind, setLatestScoringKind] = useState<'entry' | 'submission' | 'test' | null>(null);
   const [scoringState, setScoringState] = useState<ScoringState | null>(null);
   const [champion, setChampion] = useState<string | null>(null);
   const [scoringUrl, setScoringUrl] = useState(getSavedScoringUrl);
@@ -226,11 +228,11 @@ function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
       setActiveJobId(null);
       setActiveJobStatus(job.status);
       if (job.status === 'succeeded') {
-        const score = job.result?.converted_score;
-        setMessage(typeof score === 'number'
-          ? `Chấm xong! Điểm đầu vào có trọng số: ${score}/12.`
-          : 'Đã nhận bài thành công.');
+        setLatestScoringResult(job.result || {});
+        setMessage('');
       } else {
+        setLatestScoringResult(null);
+        setLatestScoringKind(null);
         setError(job.error_code === 'module_unavailable'
           ? 'Máy chấm không nhận được bài. Vui lòng thử lại.'
           : `Chấm bài thất bại${job.error_code ? ` (${job.error_code})` : ''}. Vui lòng thử lại.`);
@@ -259,12 +261,15 @@ function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
     setUploading(true);
     setError('');
     setMessage('');
+    setLatestScoringResult(null);
+    setLatestScoringKind(null);
     try {
       if (!file.name.endsWith('.py')) throw new Error('Chỉ nhận file Python .py');
       if (file.size > 65536) throw new Error('File bot không được vượt quá 64 KB');
       
       setMessage('Đang gửi bài đến máy chấm…');
       const kind = practiceMode ? 'test' : scoringState?.phase === 'round' ? 'submission' : 'entry';
+      setLatestScoringKind(kind);
       const context = kind === 'submission' && scoringState?.round && scoringState.day
         ? { round: scoringState.round, day: scoringState.day }
         : null;
@@ -407,6 +412,9 @@ function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
               </div>
               <div className="scoring-progress-track"><i /></div>
             </div>
+          )}
+          {!isAdminPage && latestScoringResult && latestScoringKind && (
+            <ScoringResultCard result={latestScoringResult} kind={latestScoringKind} />
           )}
           {!isAdminPage && champion && (
             <div className="champion-banner">
@@ -643,4 +651,54 @@ function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
       </div>
     </div>
   );
+}
+
+function resultLabel(score: number) {
+  return score > 0 ? 'Thắng' : score < 0 ? 'Thua' : 'Hòa';
+}
+
+function scoreText(score: number) {
+  return `${score > 0 ? '+' : ''}${score}`;
+}
+
+function ScoringResultCard({ result, kind }: { result: Record<string, any>; kind: 'entry' | 'submission' | 'test' }) {
+  const games = Array.isArray(result.games) ? result.games : [];
+  const scores = Array.isArray(result.benchmark_scores) ? result.benchmark_scores : [];
+  const opponents = Array.isArray(result.opponents) ? result.opponents : [];
+  const isEntry = kind === 'entry';
+  const isPractice = kind === 'test';
+  const title = isEntry ? 'Kết quả vòng loại' : isPractice ? 'Kết quả luyện tập' : 'Kết quả lượt thi';
+  const matchRows = isPractice
+    ? opponents.map((opponent: Record<string, any>, index: number) => ({
+        label: opponent.name || `Bot ${index + 1}`,
+        score: Number(opponent.match_score || 0),
+      }))
+    : scores.map((score: number, index: number) => ({ label: `Bot đối chứng ${index + 1}`, score: Number(score) }));
+  if (!isEntry && !isPractice && typeof result.match_score === 'number') {
+    matchRows.push({ label: 'Bot mẫu', score: result.match_score });
+  }
+
+  return <section className="scoring-result-card" role="status" aria-live="polite">
+    <div className="scoring-result-heading">
+      <div><p className="eyebrow">KẾT QUẢ CHẤM</p><h3>{title}</h3></div>
+      <strong className={result.passed === false ? 'result-failed' : 'result-passed'}>
+        {isEntry ? (result.passed ? 'ĐẠT VÒNG LOẠI' : 'CHƯA ĐẠT') : 'ĐÃ HOÀN TẤT'}
+      </strong>
+    </div>
+    <div className="scoring-result-grid">
+      {isEntry && <div><small>Điểm có trọng số</small><strong>{result.qualification_score ?? '—'}/12</strong></div>}
+      {isPractice && <div><small>Điểm trận luyện tập</small><strong>{result.total_match_pts ?? '—'}</strong></div>}
+      {!isEntry && !isPractice && <div><small>Điểm trận</small><strong>{result.match_pts ?? '—'}</strong></div>}
+      {!isEntry && !isPractice && <div><small>Điểm ván</small><strong>{typeof result.match_score === 'number' ? scoreText(result.match_score) : '—'}</strong></div>}
+      <div><small>Số ván đã chấm</small><strong>{games.length || matchRows.length ? `${games.length || matchRows.length} ván` : '—'}</strong></div>
+      {typeof result.duration_seconds === 'number' && <div><small>Thời gian chấm</small><strong>{result.duration_seconds.toFixed(1)} giây</strong></div>}
+    </div>
+    {matchRows.length > 0 && <div className="scoring-result-matches">
+      <strong>Thắng / thua / hòa từng đối thủ</strong>
+      {matchRows.map((match, index) => <div key={`${match.label}-${index}`}><span>{match.label}</span><b className={`outcome-${match.score > 0 ? 'win' : match.score < 0 ? 'loss' : 'draw'}`}>{resultLabel(match.score)} ({scoreText(match.score)})</b></div>)}
+    </div>}
+    {isEntry && <p className="scoring-result-note">Vòng loại đấu với 3 bot đối chứng, điểm tính theo trọng số 1×ván 1 + 2×ván 2 + 3×ván 3. Ngưỡng đạt hiện tại là -2/12.</p>}
+    {isPractice && <p className="scoring-result-note">Kết quả luyện tập không tính vào thứ hạng hoặc số lượt vòng loại.</p>}
+    {!isEntry && !isPractice && result.match_result && <p className="scoring-result-note">{result.match_result}</p>}
+  </section>;
 }

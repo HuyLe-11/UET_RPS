@@ -16,6 +16,8 @@ Có thể quan sát luồng local mà chưa deploy và chưa cần Cloudflare Tu
    Kiểm tra response `config_info` có `max_cpu_time_limit >= 30`, `max_wall_time_limit >= 140`, `max_memory_limit >= 262144`.
    `OTT_JUDGE0_URL` phải là URL đầy đủ như `http://127.0.0.1:2358`; sau mọi thay đổi
    trong `config.local.env`, phải restart scoring module vì cấu hình được nạp lúc process khởi động.
+   Để dùng durable queue, cần áp dụng thêm migration `0015_durable_scoring_queue.sql` và
+   `0016_queue_claim_only_ready_jobs.sql`.
 4. Cài dependencies scoring/frontend theo cấu hình hiện có của repo.
 
 ## Chạy

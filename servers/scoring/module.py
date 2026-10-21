@@ -9,6 +9,8 @@ import uuid
 import ast
 import threading
 import time
+import socket
+import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -54,6 +56,9 @@ MAX_SOURCE_BYTES = 65536
 JOB_ID_RE = re.compile(r"^[0-9a-fA-F-]{36}$")
 WORKER_COUNT = max(1, int(os.environ.get("OTT_SCORING_WORKERS", "2")))
 QUEUE_CAPACITY = max(1, int(os.environ.get("OTT_SCORING_QUEUE_SIZE", "20")))
+MATCH_TIMEOUT_SECONDS = max(5, int(os.environ.get("OTT_SCORING_MATCH_TIMEOUT_SECONDS", "15")))
+JOB_TIMEOUT_SECONDS = max(MATCH_TIMEOUT_SECONDS, int(os.environ.get("OTT_SCORING_JOB_TIMEOUT_SECONDS", "60")))
+QUEUE_POLL_SECONDS = max(0.1, float(os.environ.get("OTT_SCORING_QUEUE_POLL_SECONDS", "0.5")))
 _workers = ThreadPoolExecutor(max_workers=WORKER_COUNT)
 _tournament_workers = ThreadPoolExecutor(max_workers=max(1, int(os.environ.get("OTT_TOURNAMENT_WORKERS", "4"))))
 _match_workers = ThreadPoolExecutor(max_workers=max(1, int(os.environ.get("OTT_TOURNAMENT_MATCH_WORKERS", "4"))))
@@ -66,6 +71,12 @@ _tournament_reschedule = set()
 _tournament_retry_counts = {}
 _active_match_ids = set()
 _started_at = time.time()
+_queue_dispatcher_started = False
+_metrics_lock = threading.Lock()
+_rejected_jobs = 0
+_completed_jobs = 0
+_failed_jobs = 0
+_last_invalid_claim_log = 0.0
 
 app = FastAPI(title="OTT Scoring Module", version="1.0.0")
 origins = [x.strip() for x in os.environ.get("OTT_SCORING_CORS_ORIGINS", "").split(",") if x.strip()]
@@ -138,9 +149,39 @@ def _rpc(name, args):
 
 def _local_result_path(job_id):
     # UUID validation and fixed directory prevent user-controlled path traversal.
-    if not JOB_ID_RE.fullmatch(job_id):
+    try:
+        normalized_id = str(uuid.UUID(str(job_id)))
+    except (ValueError, AttributeError, TypeError):
         raise ValueError("invalid job id")
-    return BOT_STORE / job_id[:2] / f"{job_id}.py"
+    return BOT_STORE / normalized_id[:2] / f"{normalized_id}.py"
+
+
+def _claimed_job_record(value):
+    """Normalize PostgREST's composite RPC response to one job dictionary."""
+    for _ in range(3):
+        if isinstance(value, list):
+            value = value[0] if value else None
+        if not isinstance(value, dict):
+            return None
+        if "id" in value:
+            break
+        # PostgREST can wrap a composite result under the function name or
+        # another single response key depending on its schema cache version.
+        nested_values = [item for item in value.values() if isinstance(item, (dict, list))]
+        value = nested_values[0] if len(nested_values) == 1 else None
+    if not isinstance(value, dict) or "id" not in value:
+        return None
+    if "id" not in value:
+        return None
+    try:
+        value = dict(value)
+        raw_id = value["id"]
+        if isinstance(raw_id, dict):
+            raw_id = raw_id.get("id") or raw_id.get("value")
+        value["id"] = str(uuid.UUID(str(raw_id)))
+    except (ValueError, AttributeError, TypeError):
+        return None
+    return value
 
 
 def _cleanup_reset_source_files(max_batches=None):
@@ -271,6 +312,8 @@ def _evaluate_result(match, duration):
 
 
 def _run_job(job_id, source_path, job):
+    global _completed_jobs, _failed_jobs
+    deadline = time.monotonic() + JOB_TIMEOUT_SECONDS
     try:
         logger.info("Starting scoring job %s (kind=%s)", job_id, job.get("kind"))
         _rpc("mark_scoring_job_running", {"p_job_id": job_id})
@@ -287,7 +330,16 @@ def _run_job(job_id, source_path, job):
         if job.get("kind") == "entry":
             weights = (1, 2, 3)
             benchmark_paths = [ROOT / "sample_bots" / f"entry_bot{index}.py" for index in range(3)]
-            matches = [run_match(source, path.read_bytes(), language_id=job.get("language_id")) for path in benchmark_paths]
+            matches = []
+            for path in benchmark_paths:
+                if time.monotonic() >= deadline:
+                    raise Judge0Error("scoring_job_timeout", "Scoring job exceeded its time limit.")
+                matches.append(run_match(
+                    source,
+                    path.read_bytes(),
+                    language_id=job.get("language_id"),
+                    max_seconds=min(MATCH_TIMEOUT_SECONDS, max(1, int(deadline - time.monotonic()))),
+                ))
             evaluation = _evaluate_entry(matches, weights, time.monotonic() - started)
             games = [game for match in matches for game in match["games"]]
         elif job.get("kind") == "test":
@@ -296,11 +348,25 @@ def _run_job(job_id, source_path, job):
             selected_benchmarks = [catalog[benchmark_id] for benchmark_id in selected if benchmark_id in catalog]
             if len(selected_benchmarks) != len(selected) or not selected_benchmarks:
                 raise ValueError("practice_benchmark_not_found")
-            matches = [run_match(source, Path(item["path"]).read_bytes(), language_id=job.get("language_id")) for item in selected_benchmarks]
+            matches = []
+            for item in selected_benchmarks:
+                if time.monotonic() >= deadline:
+                    raise Judge0Error("scoring_job_timeout", "Scoring job exceeded its time limit.")
+                matches.append(run_match(
+                    source,
+                    Path(item["path"]).read_bytes(),
+                    language_id=job.get("language_id"),
+                    max_seconds=min(MATCH_TIMEOUT_SECONDS, max(1, int(deadline - time.monotonic()))),
+                ))
             evaluation = _evaluate_practice(matches, [item["name"] for item in selected_benchmarks])
             games = [game for match in matches for game in match["games"]]
         else:
-            match = run_match(source, BENCHMARK_PATH.read_bytes(), language_id=job.get("language_id"))
+            match = run_match(
+                source,
+                BENCHMARK_PATH.read_bytes(),
+                language_id=job.get("language_id"),
+                max_seconds=min(MATCH_TIMEOUT_SECONDS, max(1, int(deadline - time.monotonic()))),
+            )
             evaluation = _evaluate_result(match, match.get("duration_seconds") or (time.monotonic() - started))
             games = match["games"]
         evaluation["judge0_language_id"] = job.get("language_id")
@@ -311,23 +377,105 @@ def _run_job(job_id, source_path, job):
         except Exception:
             logger.exception("Could not upload replay for scoring job %s", job_id)
         _rpc("complete_scoring_job", {"p_job_id": job_id, "p_result": evaluation})
+        with _metrics_lock:
+            _completed_jobs += 1
         logger.info("Scoring job %s completed and reported to Supabase", job_id)
     except Judge0Error as exc:
+        with _metrics_lock:
+            _failed_jobs += 1
         try:
             _rpc("fail_scoring_job", {"p_job_id": job_id, "p_error_code": exc.code, "p_error_message": str(exc)[:500]})
         except Exception:
             logger.exception("Could not report Judge0 failure to Supabase for job %s", job_id)
         logger.warning("Scoring job %s failed in Judge0 [%s]: %s", job_id, exc.code, exc)
     except Exception as exc:
+        with _metrics_lock:
+            _failed_jobs += 1
         try:
             _rpc("fail_scoring_job", {"p_job_id": job_id, "p_error_code": "module_error", "p_error_message": type(exc).__name__})
         except Exception:
             logger.exception("Could not report module failure to Supabase for job %s", job_id)
         logger.exception("Scoring job %s failed", job_id)
     finally:
+        try:
+            source_path.unlink(missing_ok=True)
+        except OSError:
+            logger.exception("Could not remove source file for scoring job %s", job_id)
         with _dedupe_lock:
             _inflight.discard(job_id)
         _capacity.release()
+
+
+def _queue_depth():
+    rows = get_supabase().select(
+        "scoring_jobs",
+        {
+            "select": "id,created_at,status",
+            "status": "in.(dispatching,accepted,running)",
+            "order": "created_at.asc",
+            "limit": str(QUEUE_CAPACITY + 1),
+        },
+    ) or []
+    return rows
+
+
+def _queue_dispatch_loop():
+    global _last_invalid_claim_log
+    worker_id = f"{socket.gethostname()}:{os.getpid()}"
+    last_requeue = 0.0
+    while True:
+        try:
+            if time.monotonic() - last_requeue >= 5:
+                _rpc("requeue_expired_scoring_jobs", {})
+                last_requeue = time.monotonic()
+            while _capacity.acquire(blocking=False):
+                claimed = _rpc("claim_scoring_job", {
+                    "p_worker_id": worker_id,
+                    "p_lease_seconds": max(90, JOB_TIMEOUT_SECONDS + 30),
+                })
+                if not claimed:
+                    _capacity.release()
+                    break
+                claimed = _claimed_job_record(claimed)
+                if not claimed:
+                    now = time.monotonic()
+                    if now - _last_invalid_claim_log >= 30:
+                        logger.warning(
+                            "Scoring queue claim returned an invalid composite response; releasing slot"
+                        )
+                        _last_invalid_claim_log = now
+                    _capacity.release()
+                    time.sleep(max(1.0, QUEUE_POLL_SECONDS))
+                    break
+                job_id = str(claimed["id"])
+                source_path = _local_result_path(job_id)
+                if not source_path.is_file():
+                    _rpc("fail_scoring_job", {
+                        "p_job_id": job_id,
+                        "p_error_code": "source_missing",
+                        "p_error_message": "Scoring source file is missing on the module host.",
+                    })
+                    try:
+                        source_path.unlink(missing_ok=True)
+                    except OSError:
+                        logger.exception("Could not remove missing source path for %s", job_id)
+                    _capacity.release()
+                    continue
+                job = dict(claimed)
+                job["language_id"] = int(os.environ.get("OTT_JUDGE0_PYTHON_ID", "71"))
+                with _dedupe_lock:
+                    _inflight.add(job_id)
+                try:
+                    _workers.submit(_run_job, job_id, source_path, job)
+                except Exception:
+                    with _dedupe_lock:
+                        _inflight.discard(job_id)
+                    _capacity.release()
+                    raise
+            time.sleep(QUEUE_POLL_SECONDS)
+        except Exception:
+            logger.exception("Scoring queue dispatcher failed; retrying")
+            time.sleep(max(1.0, QUEUE_POLL_SECONDS))
 
 
 def _evaluate_entry(matches, weights, duration):
@@ -560,6 +708,10 @@ def _schedule_tournament_day(round_number, day_number):
 
 @app.on_event("startup")
 def resume_tournament_work_after_restart():
+    global _queue_dispatcher_started
+    if not _queue_dispatcher_started:
+        _queue_dispatcher_started = True
+        threading.Thread(target=_queue_dispatch_loop, name="scoring-queue", daemon=True).start()
     try:
         _tournament_workers.submit(_cleanup_reset_source_files)
         rows = get_supabase().select("tournament_state", {
@@ -580,12 +732,34 @@ async def health():
 @app.get("/v1/admin/metrics")
 async def admin_metrics(authorization: str | None = Header(None)):
     token = _token(authorization)
-    user = _user(token)
-    profiles = get_supabase().select("profiles", {"id": f"eq.{user.get('id')}", "select": "role", "limit": "1"})
+    user = await asyncio.to_thread(_user, token)
+    profiles = await asyncio.to_thread(
+        get_supabase().select,
+        "profiles",
+        {"id": f"eq.{user.get('id')}", "select": "role", "limit": "1"},
+    )
     if not profiles or profiles[0].get("role") != "admin":
         raise HTTPException(status_code=403, detail="Chỉ admin được xem metrics")
     with _dedupe_lock:
         active = len(_inflight)
+    try:
+        queue_rows = _queue_depth()
+    except Exception:
+        logger.exception("Could not read scoring queue metrics")
+        queue_rows = []
+    with _metrics_lock:
+        rejected = _rejected_jobs
+        completed = _completed_jobs
+        failed = _failed_jobs
+    queued = len(queue_rows)
+    oldest_age = 0
+    if queue_rows:
+        oldest = queue_rows[0].get("created_at")
+        if oldest:
+            try:
+                oldest_age = max(0, int(time.time() - __import__("datetime").datetime.fromisoformat(oldest.replace("Z", "+00:00")).timestamp()))
+            except (TypeError, ValueError):
+                oldest_age = 0
     try:
         judge0 = {"status": "online", **judge0_status()}
     except Exception as exc:
@@ -598,6 +772,15 @@ async def admin_metrics(authorization: str | None = Header(None)):
         "active_jobs": active,
         "job_capacity": QUEUE_CAPACITY,
         "available_slots": _capacity._value,
+        "queue_depth": queued,
+        "queue_limit": QUEUE_CAPACITY,
+        "queued_jobs": max(0, queued - active),
+        "oldest_queued_seconds": oldest_age,
+        "rejected_jobs": rejected,
+        "completed_jobs": completed,
+        "failed_jobs": failed,
+        "match_timeout_seconds": MATCH_TIMEOUT_SECONDS,
+        "job_timeout_seconds": JOB_TIMEOUT_SECONDS,
         "judge0": judge0,
     }
 
@@ -748,13 +931,21 @@ async def accept_job(
 
     digest = hashlib.sha256(source).hexdigest()
     sb = get_supabase()
-    rows = sb.select("scoring_jobs", {"id": f"eq.{job_id}", "user_id": f"eq.{user.get('id')}", "limit": "1"})
+    rows = await asyncio.to_thread(
+        sb.select,
+        "scoring_jobs",
+        {"id": f"eq.{job_id}", "user_id": f"eq.{user.get('id')}", "limit": "1"},
+    )
     if not rows:
         # The browser sends the Supabase insert and this request concurrently.
         # Give the insert a short window to commit, then reject and do not score.
         for _ in range(20):
             await __import__("asyncio").sleep(0.1)
-            rows = sb.select("scoring_jobs", {"id": f"eq.{job_id}", "user_id": f"eq.{user.get('id')}", "limit": "1"})
+            rows = await asyncio.to_thread(
+                sb.select,
+                "scoring_jobs",
+                {"id": f"eq.{job_id}", "user_id": f"eq.{user.get('id')}", "limit": "1"},
+            )
             if rows:
                 break
     if not rows:
@@ -770,29 +961,44 @@ async def accept_job(
         if len(selected_ids) > 8 or any(item not in available_ids for item in selected_ids):
             raise HTTPException(status_code=400, detail="Danh sách bot luyện tập không hợp lệ")
         job["benchmark_ids"] = selected_ids
+        try:
+            await asyncio.to_thread(
+                get_supabase().update,
+                "scoring_jobs",
+                {"id": f"eq.{job_id}"},
+                {"benchmark_ids": selected_ids},
+            )
+        except Exception:
+            logger.exception("Could not persist practice benchmark selection for job %s", job_id)
+            raise HTTPException(status_code=503, detail="Không lưu được cấu hình bot luyện tập") from None
 
-    source_path = _save_source(job_id, source)
-    if not _capacity.acquire(blocking=False):
-        raise HTTPException(status_code=503, detail="Hàng đợi chấm đang đầy; vui lòng thử lại")
     try:
-        accepted = _rpc("mark_scoring_job_accepted", {"p_job_id": job_id})
-        if accepted is False:
-            raise HTTPException(status_code=409, detail="Job đã bị hủy hoặc không còn chờ nhận")
-        with _dedupe_lock:
-            if job_id in _inflight:
-                _capacity.release()
-                return {"ok": True, "job_id": job_id, "status": "accepted"}
-            _inflight.add(job_id)
-        job["language_id"] = int(os.environ.get("OTT_JUDGE0_PYTHON_ID", "71"))
-        _workers.submit(_run_job, job_id, source_path, job)
-        logger.info("Accepted scoring job %s (kind=%s, user=%s)", job_id, job.get("kind"), user.get("id"))
+        queued_rows = await asyncio.to_thread(_queue_depth)
     except Exception:
-        with _dedupe_lock:
-            _inflight.discard(job_id)
-        _capacity.release()
-        logger.exception("Could not accept scoring job %s or update its Supabase status", job_id)
-        raise HTTPException(status_code=503, detail="Không thể nhận job chấm") from None
-    return {"ok": True, "job_id": job_id, "status": "accepted"}
+        logger.exception("Could not inspect queue before accepting job %s", job_id)
+        raise HTTPException(status_code=503, detail="Không kiểm tra được sức chứa hàng đợi") from None
+    if len(queued_rows) >= QUEUE_CAPACITY:
+        with _metrics_lock:
+            _rejected_jobs += 1
+        raise HTTPException(status_code=503, detail="Hàng đợi chấm đang đầy; vui lòng thử lại")
+    source_path = _save_source(job_id, source)
+    try:
+        accepted = await asyncio.to_thread(
+            _rpc,
+            "mark_scoring_job_accepted",
+            {"p_job_id": job_id},
+        )
+        if accepted is False:
+            source_path.unlink(missing_ok=True)
+            raise HTTPException(status_code=409, detail="Job đã được nhận hoặc không còn chờ")
+    except HTTPException:
+        raise
+    except Exception:
+        source_path.unlink(missing_ok=True)
+        logger.exception("Could not enqueue scoring job %s", job_id)
+        raise HTTPException(status_code=503, detail="Không thể đưa job vào hàng đợi") from None
+    logger.info("Queued scoring job %s (kind=%s, user=%s)", job_id, job.get("kind"), user.get("id"))
+    return {"ok": True, "job_id": job_id, "status": "queued", "queue_depth": len(queued_rows) + 1}
 
 
 if __name__ == "__main__":

@@ -257,13 +257,13 @@ def judge0_status(base_url=None):
     }
 
 
-def run_match(contestant: bytes, benchmark: bytes, base_url=None, language_id=None):
+def run_match(contestant: bytes, benchmark: bytes, base_url=None, language_id=None, max_seconds=None):
     """Submit and poll a BO2 execution; return score and raw replay games."""
     base_url = _judge0_url(base_url)
     source = _runner_source(contestant, benchmark)
     language_id = int(language_id or os.environ.get("OTT_JUDGE0_PYTHON_ID", "71"))
     cpu_seconds = float(os.environ.get("OTT_JUDGE0_CPU_SECONDS", "30"))
-    max_seconds = float(os.environ.get("OTT_JUDGE0_MAX_SECONDS", "140"))
+    max_seconds = float(max_seconds or os.environ.get("OTT_JUDGE0_MAX_SECONDS", "140"))
     memory_kb = int(os.environ.get("OTT_JUDGE0_MEMORY_KB", "262144"))
 
     try:
@@ -299,7 +299,9 @@ def run_match(contestant: bytes, benchmark: bytes, base_url=None, language_id=No
     if not token:
         raise Judge0Error("judge0_invalid_response", "Judge0 did not return a submission token")
 
-    deadline = time.monotonic() + max_seconds + 20
+    # Keep polling grace bounded so a queued or stalled Judge0 submission
+    # cannot multiply the configured match timeout across an entire job.
+    deadline = time.monotonic() + max_seconds + 5
     fields = urllib.parse.quote("stdout,stderr,compile_output,message,status,time,memory")
     while time.monotonic() < deadline:
         result = _judge0_request(base_url, f"/submissions/{token}?base64_encoded=false&fields={fields}")

@@ -561,9 +561,13 @@ function SystemMetrics({ metrics, state }: { metrics: Record<string, any> | null
     <div className="monitor-list"><div><span>Kết nối máy chấm</span><strong>{state === 'online' ? 'Đang hoạt động' : state === 'offline' ? 'Mất kết nối' : 'Chưa kiểm tra'}</strong></div>
       <div><span>Môi trường chạy bot</span><strong>{judge?.status === 'online' ? 'Đang hoạt động' : judge?.status === 'offline' ? 'Mất kết nối' : 'Chưa có số liệu'}</strong></div>
       <div><span>Lượt đang xử lý / tổng lượt đồng thời</span><strong>{metrics ? `${metrics.active_jobs}/${metrics.workers}` : '—'}</strong></div>
-      <div><span>Slot còn trống / sức chứa</span><strong>{metrics ? `${metrics.available_slots}/${metrics.job_capacity}` : '—'}</strong></div>
+      <div><span>Queue đang dùng / sức chứa</span><strong>{metrics ? `${metrics.queue_depth}/${metrics.queue_limit}` : '—'}</strong></div>
+      <div><span>Job đang chờ</span><strong>{metrics ? `${metrics.queued_jobs} · lâu nhất ${metrics.oldest_queued_seconds}s` : '—'}</strong></div>
+      <div><span>Job bị từ chối do quá tải</span><strong>{metrics ? metrics.rejected_jobs : '—'}</strong></div>
+      <div><span>Kết quả hoàn tất / thất bại</span><strong>{metrics ? `${metrics.completed_jobs}/${metrics.failed_jobs}` : '—'}</strong></div>
       <div><span>Thời gian chạy liên tục</span><strong>{metrics ? `${Math.floor(metrics.uptime_seconds / 3600)}h ${Math.floor(metrics.uptime_seconds % 3600 / 60)}m` : '—'}</strong></div>
       <div><span>Giới hạn thời gian chạy / thời gian thực</span><strong>{judge?.status === 'online' ? `${judge.max_cpu_time_limit}s / ${judge.max_wall_time_limit}s` : '—'}</strong></div>
+      <div><span>Timeout match / toàn job</span><strong>{metrics ? `${metrics.match_timeout_seconds}s / ${metrics.job_timeout_seconds}s` : '—'}</strong></div>
       <div><span>Bộ nhớ tối đa mỗi lượt</span><strong>{judge?.status === 'online' && judge.max_memory_limit ? `${Math.round(judge.max_memory_limit / 1024)} MB` : '—'}</strong></div>
     </div>
   </section>;
