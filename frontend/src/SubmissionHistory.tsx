@@ -1,0 +1,107 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AlertCircle, ChevronDown, Clock3, RotateCcw, Swords } from 'lucide-react';
+import Replay from './Replay';
+import './submission-history.css';
+import { getReplayMetadata, getSubmissionHistory, supabase, type ReplayMatch, type Replays, type SubmissionHistoryItem, type User } from './api';
+
+const statusText: Record<string, string> = {
+  dispatching: 'Đang gửi', accepted: 'Đã nhận', running: 'Đang chấm', succeeded: 'Đã chấm xong',
+  failed: 'Chấm lỗi', timed_out: 'Quá thời gian', dispatch_failed: 'Máy chấm không nhận',
+};
+
+export default function SubmissionHistory({ user, replays }: { user: User; replays: Replays }) {
+  const [items, setItems] = useState<SubmissionHistoryItem[]>([]);
+  const [historyReplays, setHistoryReplays] = useState(replays);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const refresh = useCallback(async () => {
+    try {
+      if (!user.id) throw new Error('Phiên đăng nhập không có mã tài khoản.');
+      const [rows, replayData] = await Promise.all([
+        getSubmissionHistory(user.id), getReplayMetadata().catch(() => null),
+      ]);
+      setItems(rows);
+      if (replayData) setHistoryReplays(replayData);
+      setError('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Không tải được lịch sử nộp bài.');
+    } finally { setLoading(false); }
+  }, [user.id]);
+
+  useEffect(() => {
+    void refresh();
+    const channel = supabase.channel(`submission-history-${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'scoring_jobs', filter: `user_id=eq.${user.id}` }, () => void refresh())
+      .subscribe();
+    const timer = window.setInterval(() => void refresh(), 30_000);
+    return () => { window.clearInterval(timer); void supabase.removeChannel(channel); };
+  }, [refresh, user.id]);
+
+  const replayRows = historyReplays.allMatches || historyReplays.matches;
+  return <section className="panel submission-history">
+    <div className="section-heading"><div><p className="eyebrow">BOT CỦA BẠN</p><h2>Lịch sử nộp bài</h2></div>
+      <button type="button" className="secondary" onClick={() => { setLoading(true); void refresh(); }}><RotateCcw size={15}/>Làm mới</button>
+    </div>
+    <p className="muted">Mở một lượt để xem kết quả phân tích. Replay được tải riêng khi bạn yêu cầu.</p>
+    {error && <p className="form-error" role="alert">{error}</p>}
+    {loading ? <div className="empty-state"><Clock3/><h3>Đang tải lịch sử…</h3></div>
+      : !items.length ? <div className="empty-state"><Swords/><h3>Bạn chưa có lượt nộp nào</h3><p>Các lượt gửi bot sẽ xuất hiện tại đây.</p></div>
+        : <div className="submission-history-list">{items.map(item => {
+          const entryReplay = replayRows.find(row => row.kind === 'job' && row.id === item.id);
+          const matchReplays = item.kind === 'submission' && item.rnd && item.day
+            ? replayRows.filter(row => row.kind === 'match' && row.storagePath && (row.a === user.name || row.b === user.name)
+              && row.round === item.rnd && row.day === item.day)
+            : [];
+          return <details className="submission-history-item" key={item.id}>
+            <summary><span className="history-summary-main"><strong>{item.kind === 'entry' ? 'Vòng loại' : `Vòng ${item.rnd} · Ngày ${item.day}`}</strong>
+              <small>{new Date(item.created_at).toLocaleString()}</small></span>
+              <span className={`history-status ${item.status}`}><i/>{statusText[item.status] || item.status}</span>
+              <span className="history-score">{item.kind === 'entry' && typeof item.result?.qualification_score === 'number'
+                ? `${item.result.qualification_score}/12` : item.kind === 'entry' ? '—/12' : 'Bài thi'}</span>
+              <ChevronDown size={17}/>
+            </summary>
+            <div className="submission-history-details">
+              {item.status === 'succeeded' && item.kind === 'entry' && <EntryAnalysis item={item}/>}
+              {item.status === 'succeeded' && item.kind === 'submission' && <>
+                <p>Bài đã được nhận cho ngày thi. Phân tích và replay các trận sẽ hiện sau khi kết quả ngày đó được công bố.</p>
+                {matchReplays.length ? <div className="history-match-list">{matchReplays.map(match => <HistoryReplay key={match.id} match={match} round={item.rnd!} day={item.day!}/>)}</div>
+                  : <p className="muted">Chưa có replay được công bố cho ngày này.</p>}
+              </>}
+              {['failed', 'timed_out', 'dispatch_failed'].includes(item.status) && <p className="form-error"><AlertCircle size={16}/>{item.error_code || 'scoring_failed'}{item.error_message ? ` · ${item.error_message}` : ''}</p>}
+              {item.status !== 'succeeded' && !['failed', 'timed_out', 'dispatch_failed'].includes(item.status) && <p>Máy chấm đang xử lý lượt gửi này.</p>}
+              {item.kind === 'entry' && item.status === 'succeeded' && (entryReplay
+                ? <HistoryReplay match={entryReplay} round={0} day={0}/>
+                : <p className="muted">Lượt này chưa có replay được lưu.</p>)}
+            </div>
+          </details>;
+        })}</div>}
+  </section>;
+}
+
+function EntryAnalysis({ item }: { item: SubmissionHistoryItem }) {
+  const result = item.result || {};
+  const scores = Array.isArray(result.benchmark_scores) ? result.benchmark_scores : [];
+  const games = Array.isArray(result.games) ? result.games : [];
+  const criteria = result.criteria && typeof result.criteria === 'object' ? Object.values(result.criteria) as Array<Record<string, any>> : [];
+  return <div className="entry-analysis">
+    <div className="analysis-metrics"><div><small>Kết quả</small><strong>{result.passed ? 'Đạt vòng loại' : 'Chưa đạt'}</strong></div>
+      <div><small>Điểm có trọng số</small><strong>{result.qualification_score ?? '—'}/12</strong></div>
+      <div><small>Ba bot đối chứng</small><strong>{scores.length ? scores.map((score: number) => `${score > 0 ? '+' : ''}${score}`).join(' · ') : '—'}</strong></div>
+    </div>
+    {criteria.map((criterion, index) => <p key={index}><strong>{criterion.name || 'Phân tích'}:</strong> {criterion.score || '—'} {criterion.status ? `· ${criterion.status}` : ''}</p>)}
+    {games.length > 0 && <div className="analysis-game-list"><strong>Diễn biến từng ván</strong>{games.map((game: any, index: number) => <span key={index}>Ván {index + 1}: {game.result > 0 ? 'thắng' : game.result < 0 ? 'thua' : 'hòa'} · {game.moves?.length ?? 0} nước{game.fault ? ' · có lỗi nước đi' : ''}</span>)}</div>}
+  </div>;
+}
+
+function HistoryReplay({ match, round, day }: { match: ReplayMatch; round: number; day: number }) {
+  const [requested, setRequested] = useState(false);
+  const replayData = useMemo<Replays>(() => ({
+    available: [{ round, day }], round, day, matches: [match], allMatches: [match],
+  }), [match, round, day]);
+  return <div className="history-replay">
+    <div><strong>{match.kind === 'job' ? 'Replay vòng loại' : `Lượt ${match.rd}: ${match.a} · ${match.s > 0 ? 'thắng' : match.s < 0 ? 'thua' : 'hòa'} · ${match.b}`}</strong>
+      <button type="button" className="secondary" onClick={() => setRequested(value => !value)}>{requested ? 'Ẩn replay' : 'Yêu cầu replay'}<Swords size={15}/></button></div>
+    {requested && <Replay data={replayData} onDay={() => undefined}/>}
+  </div>;
+}
