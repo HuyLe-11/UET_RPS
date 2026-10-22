@@ -6,7 +6,7 @@ self-hosted scoring module. This CLI intentionally has no SQLite write path.
 import json
 import sys
 
-from backend.supabase_client import get_supabase
+from data.supabase_client import get_supabase
 
 
 def main(argv=None):

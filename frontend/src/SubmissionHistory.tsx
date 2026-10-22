@@ -54,24 +54,28 @@ export default function SubmissionHistory({ user, replays }: { user: User; repla
               && row.round === item.rnd && row.day === item.day)
             : [];
           return <details className="submission-history-item" key={item.id}>
-            <summary><span className="history-summary-main"><strong>{item.kind === 'entry' ? 'Vòng loại' : `Vòng ${item.rnd} · Ngày ${item.day}`}</strong>
+              <summary><span className="history-summary-main"><strong>{item.kind === 'entry' ? 'Vòng loại' : item.kind === 'test' ? 'Luyện tập' : `Vòng ${item.rnd} · Ngày ${item.day}`}</strong>
               <small>{new Date(item.created_at).toLocaleString()}</small></span>
               <span className={`history-status ${item.status}`}><i/>{statusText[item.status] || item.status}</span>
               <span className="history-score">{item.kind === 'entry' && typeof item.result?.qualification_score === 'number'
-                ? `${item.result.qualification_score}/12` : item.kind === 'entry' ? '—/12' : 'Bài thi'}</span>
+                ? `${item.result.qualification_score}/12` : item.kind === 'entry' ? '—/12' : item.kind === 'test' ? `${item.result?.total_match_pts ?? '—'} pts luyện tập` : 'Bài thi'}</span>
               <ChevronDown size={17}/>
             </summary>
             <div className="submission-history-details">
               {item.status === 'succeeded' && item.kind === 'entry' && <EntryAnalysis item={item}/>}
               {item.status === 'succeeded' && item.kind === 'submission' && <>
                 <p>Bài đã được nhận cho ngày thi. Phân tích và replay các trận sẽ hiện sau khi kết quả ngày đó được công bố.</p>
-                {matchReplays.length ? <div className="history-match-list">{matchReplays.map(match => <HistoryReplay key={match.id} match={match} round={item.rnd!} day={item.day!}/>)}</div>
+                {matchReplays.length ? <div className="history-match-list">{matchReplays.map(match => <HistoryReplay key={match.id} match={match} round={item.rnd!} day={item.day!} contestantName={user.name}/>)}</div>
                   : <p className="muted">Chưa có replay được công bố cho ngày này.</p>}
+              </>}
+              {item.status === 'succeeded' && item.kind === 'test' && <>
+                <p>Lượt luyện tập không ảnh hưởng thứ hạng giải đấu.</p>
+                {(item.result?.opponents || []).map((opponent: any) => <p key={opponent.name}>{opponent.name}: {opponent.match_score > 0 ? 'thắng' : opponent.match_score < 0 ? 'thua' : 'hòa'} ({opponent.match_score > 0 ? '+' : ''}{opponent.match_score})</p>)}
               </>}
               {['failed', 'timed_out', 'dispatch_failed'].includes(item.status) && <p className="form-error"><AlertCircle size={16}/>{item.error_code || 'scoring_failed'}{item.error_message ? ` · ${item.error_message}` : ''}</p>}
               {item.status !== 'succeeded' && !['failed', 'timed_out', 'dispatch_failed'].includes(item.status) && <p>Máy chấm đang xử lý lượt gửi này.</p>}
-              {item.kind === 'entry' && item.status === 'succeeded' && (entryReplay
-                ? <HistoryReplay match={entryReplay} round={0} day={0}/>
+              {(item.kind === 'entry' || item.kind === 'test') && item.status === 'succeeded' && (entryReplay
+                ? <HistoryReplay match={entryReplay} round={0} day={0} label={item.kind === 'test' ? 'Replay luyện tập' : 'Replay vòng loại'} contestantName={user.name}/>
                 : <p className="muted">Lượt này chưa có replay được lưu.</p>)}
             </div>
           </details>;
@@ -87,20 +91,32 @@ function EntryAnalysis({ item }: { item: SubmissionHistoryItem }) {
   return <div className="entry-analysis">
     <div className="analysis-metrics"><div><small>Kết quả</small><strong>{result.passed ? 'Đạt vòng loại' : 'Chưa đạt'}</strong></div>
       <div><small>Điểm có trọng số</small><strong>{result.qualification_score ?? '—'}/12</strong></div>
-      <div><small>Ba bot đối chứng</small><strong>{scores.length ? scores.map((score: number) => `${score > 0 ? '+' : ''}${score}`).join(' · ') : '—'}</strong></div>
+      <div><small>Kết quả đối đầu</small><strong>{scores.length ? scores.map((score: number, index: number) => `Bot ${index + 1}: ${matchOutcome(score)} (${signedScore(score)})`).join(' · ') : '—'}</strong></div>
     </div>
     {criteria.map((criterion, index) => <p key={index}><strong>{criterion.name || 'Phân tích'}:</strong> {criterion.score || '—'} {criterion.status ? `· ${criterion.status}` : ''}</p>)}
     {games.length > 0 && <div className="analysis-game-list"><strong>Diễn biến từng ván</strong>{games.map((game: any, index: number) => <span key={index}>Ván {index + 1}: {game.result > 0 ? 'thắng' : game.result < 0 ? 'thua' : 'hòa'} · {game.moves?.length ?? 0} nước{game.fault ? ' · có lỗi nước đi' : ''}</span>)}</div>}
   </div>;
 }
 
-function HistoryReplay({ match, round, day }: { match: ReplayMatch; round: number; day: number }) {
+function matchOutcome(score: number) {
+  return score > 0 ? 'thắng' : score < 0 ? 'thua' : 'hòa';
+}
+
+function signedScore(score: number) {
+  return `${score > 0 ? '+' : ''}${score}`;
+}
+
+function HistoryReplay({ match, round, day, label, contestantName }: { match: ReplayMatch; round: number; day: number; label?: string; contestantName?: string }) {
   const [requested, setRequested] = useState(false);
   const replayData = useMemo<Replays>(() => ({
     available: [{ round, day }], round, day, matches: [match], allMatches: [match],
   }), [match, round, day]);
+  const contestantScore = contestantName && match.a !== contestantName ? -match.s : match.s;
+  const matchLabel = contestantName
+    ? `Lượt ${match.rd}: Bạn ${matchOutcome(contestantScore)} · ${match.a === contestantName ? match.b : match.a}`
+    : `Lượt ${match.rd}: ${match.a} · ${matchOutcome(match.s)} · ${match.b}`;
   return <div className="history-replay">
-    <div><strong>{match.kind === 'job' ? 'Replay vòng loại' : `Lượt ${match.rd}: ${match.a} · ${match.s > 0 ? 'thắng' : match.s < 0 ? 'thua' : 'hòa'} · ${match.b}`}</strong>
+    <div><strong>{label || (match.kind === 'job' ? 'Replay vòng loại' : matchLabel)}</strong>
       <button type="button" className="secondary" onClick={() => setRequested(value => !value)}>{requested ? 'Ẩn replay' : 'Yêu cầu replay'}<Swords size={15}/></button></div>
     {requested && <Replay data={replayData} onDay={() => undefined}/>}
   </div>;

@@ -36,12 +36,11 @@ Có giao diện tổng quan, chọn bot Python, bảng xếp hạng, phát lại
 Chọn/nộp bot trong demo chỉ ghi nhận tên file trong bộ nhớ, không upload hay chấm thi.
 Không tạo điểm hoặc trận giả: bảng xếp hạng và phát lại hiển thị trạng thái chưa có dữ liệu.
 
-## Backend gốc
+## Tích hợp hiện tại
 
-Python, DB và các trang /admin, /live được giữ nguyên để tích hợp về sau.
-Các trang đó cần chạy backend và DB giải đấu nếu muốn sử dụng.
-Giao diện React mặc định hoạt động độc lập, không gọi backend để xác thực hoặc chấm thi.
-server.py có thêm phục vụ React build tại / và /assets.
+Frontend dùng Supabase Auth/RPC/Storage và gọi scoring module cho luồng chấm online.
+Tài khoản admin được tạo/import bằng `admin_cli_service`; FastAPI backend cũ đã được lưu trong
+`backup/fastapi_backend/` để tham khảo, không còn là runtime service.
 Không thêm bảng tài khoản SQLite mới.
 
 ## Mã nguồn

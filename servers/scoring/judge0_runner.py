@@ -26,6 +26,22 @@ class Judge0Error(RuntimeError):
         super().__init__(message)
 
 
+def _judge0_url(value=None):
+    raw = (value or os.environ.get("OTT_JUDGE0_URL", "http://127.0.0.1:2358")).strip()
+    parsed = urllib.parse.urlparse(raw)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise Judge0Error(
+            "judge0_invalid_url",
+            f"OTT_JUDGE0_URL must be an absolute HTTP(S) URL, got {raw!r}",
+        )
+    if parsed.username or parsed.password or parsed.query or parsed.fragment:
+        raise Judge0Error(
+            "judge0_invalid_url",
+            "OTT_JUDGE0_URL must not contain credentials, query, or fragment",
+        )
+    return raw.rstrip("/")
+
+
 def _runner_source(contestant, benchmark):
     contestant_b64 = base64.b64encode(contestant).decode("ascii")
     benchmark_b64 = base64.b64encode(benchmark).decode("ascii")
@@ -182,6 +198,9 @@ except BaseException as exc:
 
 
 def _judge0_request(base_url, path, method="GET", payload=None, timeout=20):
+    base_url = _judge0_url(base_url)
+    if not path.startswith("/"):
+        raise Judge0Error("judge0_invalid_path", "Judge0 API path must start with '/'")
     headers = {"Accept": "application/json"}
     auth_header = os.environ.get("OTT_JUDGE0_AUTH_HEADER", "").strip()
     auth_token = os.environ.get("OTT_JUDGE0_AUTH_TOKEN", "").strip()
@@ -190,7 +209,7 @@ def _judge0_request(base_url, path, method="GET", payload=None, timeout=20):
     body = None if payload is None else json.dumps(payload).encode("utf-8")
     if body is not None:
         headers["Content-Type"] = "application/json"
-    req = urllib.request.Request(base_url.rstrip("/") + path, data=body, headers=headers, method=method)
+    req = urllib.request.Request(base_url + path, data=body, headers=headers, method=method)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as response:
             raw = response.read()
@@ -204,7 +223,7 @@ def _judge0_request(base_url, path, method="GET", payload=None, timeout=20):
 
 def list_bot_languages(base_url=None):
     """Return active Python 3 runtimes supported by the function bot protocol."""
-    base_url = (base_url or os.environ.get("OTT_JUDGE0_URL", "http://127.0.0.1:2358")).rstrip("/")
+    base_url = _judge0_url(base_url)
     languages = _judge0_request(base_url, "/languages/")
     if not isinstance(languages, list):
         raise Judge0Error("judge0_invalid_response", "Judge0 /languages did not return a list")
@@ -228,7 +247,7 @@ def default_bot_language(base_url=None):
 
 def judge0_status(base_url=None):
     """Return non-secret Judge0 capacity limits for the admin monitor."""
-    url = (base_url or os.environ.get("OTT_JUDGE0_URL", "http://127.0.0.1:2358")).rstrip("/")
+    url = _judge0_url(base_url)
     config = _judge0_request(url, "/config_info")
     return {
         "max_cpu_time_limit": config.get("max_cpu_time_limit"),
@@ -238,13 +257,13 @@ def judge0_status(base_url=None):
     }
 
 
-def run_match(contestant: bytes, benchmark: bytes, base_url=None, language_id=None):
+def run_match(contestant: bytes, benchmark: bytes, base_url=None, language_id=None, max_seconds=None):
     """Submit and poll a BO2 execution; return score and raw replay games."""
-    base_url = (base_url or os.environ.get("OTT_JUDGE0_URL", "http://127.0.0.1:2358")).rstrip("/")
+    base_url = _judge0_url(base_url)
     source = _runner_source(contestant, benchmark)
     language_id = int(language_id or os.environ.get("OTT_JUDGE0_PYTHON_ID", "71"))
     cpu_seconds = float(os.environ.get("OTT_JUDGE0_CPU_SECONDS", "30"))
-    max_seconds = float(os.environ.get("OTT_JUDGE0_MAX_SECONDS", "140"))
+    max_seconds = float(max_seconds or os.environ.get("OTT_JUDGE0_MAX_SECONDS", "140"))
     memory_kb = int(os.environ.get("OTT_JUDGE0_MEMORY_KB", "262144"))
 
     try:
@@ -280,7 +299,9 @@ def run_match(contestant: bytes, benchmark: bytes, base_url=None, language_id=No
     if not token:
         raise Judge0Error("judge0_invalid_response", "Judge0 did not return a submission token")
 
-    deadline = time.monotonic() + max_seconds + 20
+    # Keep polling grace bounded so a queued or stalled Judge0 submission
+    # cannot multiply the configured match timeout across an entire job.
+    deadline = time.monotonic() + max_seconds + 5
     fields = urllib.parse.quote("stdout,stderr,compile_output,message,status,time,memory")
     while time.monotonic() < deadline:
         result = _judge0_request(base_url, f"/submissions/{token}?base64_encoded=false&fields={fields}")

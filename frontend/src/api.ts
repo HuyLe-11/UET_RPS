@@ -5,7 +5,6 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJ
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-const API_BASE = import.meta.env.VITE_API_URL || '';
 const DEFAULT_SCORING_MODULE_URL = (import.meta.env.VITE_SCORING_MODULE_URL || '').replace(/\/$/, '');
 const SCORING_URL_STORAGE_KEY = 'ott.scoring_module_url';
 
@@ -91,6 +90,38 @@ export async function postScoringAdmin<T = Record<string, unknown>>(value: strin
   return payload as T;
 }
 
+export type ScoringBenchmark = { id: string; name: string };
+
+export async function getScoringBenchmarks(value: string): Promise<ScoringBenchmark[]> {
+  const base = normalizeScoringUrl(value);
+  let response: Response;
+  try {
+    response = await fetch(`${base}/v1/benchmarks`, { cache: 'no-store' });
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error('Không phân giải được URL máy chấm; hãy cập nhật tunnel trong mục Quản trị máy chấm.');
+    }
+    throw error;
+  }
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.detail || `Không tải được bot mẫu (HTTP ${response.status}).`);
+  return Array.isArray(payload?.benchmarks) ? payload.benchmarks : [];
+}
+
+export async function uploadScoringBenchmark(value: string, file: File): Promise<ScoringBenchmark> {
+  const base = normalizeScoringUrl(value);
+  const token = await getAccessToken();
+  if (!token) throw new Error('Phiên đăng nhập đã hết hạn.');
+  const form = new FormData();
+  form.append('file', file);
+  const response = await fetch(`${base}/v1/admin/benchmarks`, {
+    method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form, cache: 'no-store',
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.detail || `Không tải được bot mẫu (HTTP ${response.status}).`);
+  return payload.benchmark as ScoringBenchmark;
+}
+
 export class ApiError extends Error {
   constructor(message: string, public status: number) {
     super(message);
@@ -115,6 +146,7 @@ export async function createAndDispatchScoringJob(
   kind: 'entry' | 'submission' | 'test' = 'entry',
   scoringModuleUrl = getSavedScoringUrl(),
   context: { round: number; day: number } | null = null,
+  benchmarkIds: string[] = [],
 ): Promise<string> {
   if (!scoringModuleUrl.trim()) throw new Error('Hãy nhập URL HTTPS của máy chấm.');
   if (kind === 'submission' && (!context || context.round < 1 || context.day < 1)) {
@@ -139,6 +171,7 @@ export async function createAndDispatchScoringJob(
   });
   const body = new FormData();
   body.append('file', file);
+  if (kind === 'test') body.append('benchmark_ids', benchmarkIds.join(','));
   const dispatchController = new AbortController();
   const dispatchTimer = window.setTimeout(() => dispatchController.abort(), 10_000);
   const dispatch = fetch(`${baseUrl}/v1/jobs/${id}`, {
@@ -201,44 +234,6 @@ export interface ScoringState {
   round?: number | null;
   day?: number | null;
   scoringUrl?: string | null;
-}
-
-export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = await getAccessToken();
-  const headers = new Headers(options.headers);
-  
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`);
-  }
-
-  const url = `${API_BASE}${path}`;
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
-
-  const contentType = response.headers.get('content-type') || '';
-  let data: any = null;
-  if (contentType.includes('application/json')) {
-    data = await response.json();
-  } else {
-    data = await response.text();
-  }
-
-  if (!response.ok) {
-    const errorMsg = (typeof data === 'object' && (data?.detail || data?.error || data?.message)) || 'Không thể hoàn tất yêu cầu';
-    throw new ApiError(errorMsg, response.status);
-  }
-
-  return data as T;
-}
-
-export function post<T>(path: string, body: unknown) {
-  return api<T>(path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
 }
 
 export interface User {
@@ -316,7 +311,7 @@ export interface Replays {
 
 export interface SubmissionHistoryItem {
   id: string;
-  kind: 'entry' | 'submission';
+  kind: 'entry' | 'submission' | 'test';
   rnd: number | null;
   day: number | null;
   status: ScoringJob['status'];
@@ -331,7 +326,7 @@ export async function getSubmissionHistory(userId: string): Promise<SubmissionHi
   const { data, error } = await supabase.from('scoring_jobs')
     .select('id,kind,rnd,day,status,created_at,finished_at,result,error_code,error_message')
     .eq('user_id', userId)
-    .in('kind', ['entry', 'submission'])
+    .in('kind', ['entry', 'submission', 'test'])
     .order('created_at', { ascending: false })
     .limit(50);
   if (error) throw new Error(error.message);
